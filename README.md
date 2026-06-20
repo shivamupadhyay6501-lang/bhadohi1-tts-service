@@ -37,14 +37,14 @@ Admin Panel (Vercel) → Triggers GitHub Action
 
 Go to: **Settings → Secrets and variables → Actions → New repository secret**
 
-Add these secrets:
+Add these secrets (get values from your admin):
 
 ```
-R2_ACCESS_KEY = 239c2f6611284cd7f8a73925e2611ca7
-R2_SECRET_KEY = afc5ccdec4b6be02ea968d1b70ad1e1cfefaf7d1f74faf9126e41e50c42c6ed4
-R2_ENDPOINT = https://09f855ac9a499b9d0b63529456987ffa.r2.cloudflarestorage.com
-R2_BUCKET = bhadohi1-videos
-R2_PUBLIC_URL = https://news.opanbaux.com
+R2_ACCESS_KEY = your_r2_access_key
+R2_SECRET_KEY = your_r2_secret_key
+R2_ENDPOINT = your_r2_endpoint_url
+R2_BUCKET = your_bucket_name
+R2_PUBLIC_URL = your_public_cdn_url
 ```
 
 ### 3. Push Code to GitHub

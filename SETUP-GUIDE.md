@@ -80,31 +80,31 @@ If you don't have a token yet, continue to Step 3.
 ### Secret 1:
 ```
 Name: R2_ACCESS_KEY
-Value: 239c2f6611284cd7f8a73925e2611ca7
+Value: [Your R2 access key from Cloudflare]
 ```
 
 ### Secret 2:
 ```
 Name: R2_SECRET_KEY
-Value: afc5ccdec4b6be02ea968d1b70ad1e1cfefaf7d1f74faf9126e41e50c42c6ed4
+Value: [Your R2 secret key from Cloudflare]
 ```
 
 ### Secret 3:
 ```
 Name: R2_ENDPOINT
-Value: https://09f855ac9a499b9d0b63529456987ffa.r2.cloudflarestorage.com
+Value: [Your R2 endpoint URL]
 ```
 
 ### Secret 4:
 ```
 Name: R2_BUCKET
-Value: bhadohi1-videos
+Value: [Your R2 bucket name]
 ```
 
 ### Secret 5:
 ```
 Name: R2_PUBLIC_URL
-Value: https://news.opanbaux.com
+Value: [Your public CDN URL]
 ```
 
 **Verify:** You should see 5 secrets listed.
