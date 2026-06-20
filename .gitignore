@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# Piper binaries and models (downloaded by Actions)
+piper/
+*.onnx
+*.onnx.json
+*.tar.gz
+
+# Generated files
+*.wav
+*.mp3
+*.srt
+results.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
