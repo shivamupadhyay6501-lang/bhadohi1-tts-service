@@ -40,9 +40,9 @@ jobs:
           chmod +x piper/piper
           
           echo "📥 Downloading Hindi voice model..."
-          # Using Hindi medium quality model from correct path
-          wget -O hi_IN-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/hi_IN-medium.onnx
-          wget -O hi_IN-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/hi_IN-medium.onnx.json
+          # Direct download from HuggingFace
+          wget -O hi_IN-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/hi_IN-medium.onnx?download=true"
+          wget -O hi_IN-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/hi_IN-medium.onnx.json?download=true"
 
       - name: Install dependencies
         run: |
