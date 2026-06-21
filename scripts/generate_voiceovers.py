@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import json
 import subprocess
@@ -33,16 +32,14 @@ def format_srt_time(seconds):
 
 def generate_voiceover_with_piper(text, output_path):
     """Generate voiceover using Piper TTS at 1.25x speed"""
-    print(f"🎙️ Generating voiceover: {text[:50]}...")
+    print(f"🎙️ Generating voiceover at 1.25x speed: {text[:50]}...")
     
-    # Generate at normal speed first
-    temp_output = output_path.replace('.wav', '_temp.wav')
-    
-    # Run Piper TTS with Pratham voice (male Hindi voice)
+    # Run Piper TTS with Pratham voice at 1.25x speed using length_scale
     cmd = [
         './piper/piper',
         '--model', 'hi_IN-pratham-medium.onnx',
-        '--output_file', temp_output
+        '--length_scale', '0.8',  # 0.8 = 1.25x faster (less length = faster speech)
+        '--output_file', output_path
     ]
     
     # Pass text via stdin
@@ -59,32 +56,7 @@ def generate_voiceover_with_piper(text, output_path):
     if process.returncode != 0:
         raise Exception(f"Piper TTS failed: {stderr}")
     
-    # Speed up audio to 1.25x using ffmpeg (installed on GitHub runners)
-    print(f"⚡ Speeding up audio to 1.25x...")
-    speed_cmd = [
-        'ffmpeg',
-        '-i', temp_output,
-        '-filter:a', 'atempo=1.25',
-        '-y',  # Overwrite output
-        output_path
-    ]
-    
-    speed_process = subprocess.run(
-        speed_cmd,
-        capture_output=True,
-        text=True
-    )
-    
-    if speed_process.returncode != 0:
-        # If ffmpeg fails, just use original speed
-        print(f"⚠️ Could not speed up audio, using original speed")
-        os.rename(temp_output, output_path)
-    else:
-        # Remove temp file
-        os.remove(temp_output)
-        print(f"✅ Audio sped up to 1.25x")
-    
-    print(f"✅ Voiceover generated: {output_path}")
+    print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
     return output_path
 
 def upload_to_r2(file_path, remote_key):
