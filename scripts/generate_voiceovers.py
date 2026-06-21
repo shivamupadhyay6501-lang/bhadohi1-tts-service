@@ -35,10 +35,10 @@ def generate_voiceover_with_piper(text, output_path):
     """Generate voiceover using Piper TTS"""
     print(f"🎙️ Generating voiceover: {text[:50]}...")
     
-    # Run Piper TTS with correct model name (dash not underscore)
+    # Run Piper TTS with Pratham voice (male Hindi voice)
     cmd = [
         './piper/piper',
-        '--model', 'hi-IN-medium.onnx',
+        '--model', 'hi_IN-pratham-medium.onnx',
         '--output_file', output_path
     ]
     

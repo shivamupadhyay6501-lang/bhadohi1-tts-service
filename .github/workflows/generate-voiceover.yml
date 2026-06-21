@@ -27,9 +27,9 @@ jobs:
         with:
           path: |
             piper
-            hi-IN-medium.onnx
-            hi-IN-medium.onnx.json
-          key: piper-hindi-v1
+            hi_IN-pratham-medium.onnx
+            hi_IN-pratham-medium.onnx.json
+          key: piper-hindi-pratham-v1
 
       - name: Download Piper TTS (if not cached)
         if: steps.cache-piper.outputs.cache-hit != 'true'
@@ -39,10 +39,9 @@ jobs:
           tar -xzf piper_amd64.tar.gz
           chmod +x piper/piper
           
-          echo "📥 Downloading Hindi voice model..."
-          # Correct file names with dash (not underscore)
-          wget -O hi-IN-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi-IN-medium.onnx"
-          wget -O hi-IN-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi-IN-medium.onnx.json"
+          echo "📥 Downloading Hindi voice model (Pratham - male voice)..."
+          wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"
+          wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json"
 
       - name: Install dependencies
         run: |
