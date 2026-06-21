@@ -63,11 +63,22 @@ def upload_to_r2(file_path, remote_key):
     """Upload file to Cloudflare R2"""
     print(f"☁️ Uploading to R2: {remote_key}")
     
+    # Get R2 configuration from environment
+    r2_endpoint = os.environ.get('R2_ENDPOINT', '').strip()
+    r2_access_key = os.environ.get('R2_ACCESS_KEY', '').strip()
+    r2_secret_key = os.environ.get('R2_SECRET_KEY', '').strip()
+    r2_bucket = os.environ.get('R2_BUCKET', '').strip()
+    r2_public_url = os.environ.get('R2_PUBLIC_URL', '').strip()
+    
+    # Validate configuration
+    if not all([r2_endpoint, r2_access_key, r2_secret_key, r2_bucket, r2_public_url]):
+        raise Exception("Missing R2 configuration. Check GitHub secrets.")
+    
     s3_client = boto3.client(
         's3',
-        endpoint_url=os.environ['R2_ENDPOINT'],
-        aws_access_key_id=os.environ['R2_ACCESS_KEY'],
-        aws_secret_access_key=os.environ['R2_SECRET_KEY'],
+        endpoint_url=r2_endpoint,
+        aws_access_key_id=r2_access_key,
+        aws_secret_access_key=r2_secret_key,
         region_name='auto'
     )
     
@@ -76,13 +87,13 @@ def upload_to_r2(file_path, remote_key):
     
     with open(file_path, 'rb') as f:
         s3_client.put_object(
-            Bucket=os.environ['R2_BUCKET'],
+            Bucket=r2_bucket,
             Key=remote_key,
             Body=f,
             ContentType=content_type
         )
     
-    public_url = f"{os.environ['R2_PUBLIC_URL']}/{remote_key}"
+    public_url = f"{r2_public_url}/{remote_key}"
     print(f"✅ Uploaded: {public_url}")
     return public_url
 
