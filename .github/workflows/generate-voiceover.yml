@@ -1,16 +1,21 @@
-name: Generate Hindi Voiceovers with Piper
+name: Complete Video Production Pipeline
 
 on:
   workflow_dispatch:
     inputs:
       news_data:
-        description: 'JSON array of news items'
+        description: 'JSON array of news items with timestamps'
+        required: true
+        type: string
+      youtube_url:
+        description: 'YouTube video URL'
         required: true
         type: string
 
 jobs:
-  generate-voiceovers:
+  complete-production:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     
     steps:
       - name: Checkout code
@@ -20,6 +25,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          
+      - name: Install yt-dlp
+        run: |
+          sudo wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          yt-dlp --version
 
       - name: Cache Piper Binary and Model
         id: cache-piper
@@ -43,11 +59,24 @@ jobs:
           wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"
           wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json"
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           pip install boto3
 
-      - name: Generate Voiceovers
+      - name: Step 1 - Download and Process Video Clips
+        env:
+          YOUTUBE_URL: ${{ inputs.youtube_url }}
+          NEWS_DATA: ${{ inputs.news_data }}
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          echo "🎬 Starting video processing..."
+          python scripts/process_videos.py
+
+      - name: Step 2 - Generate Voiceovers and Captions
         env:
           NEWS_DATA: ${{ inputs.news_data }}
           R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
@@ -56,17 +85,33 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
         run: |
+          echo "🎙️ Generating voiceovers..."
           python scripts/generate_voiceovers.py
 
-      - name: Upload Results Artifact
+      - name: Step 3 - Stitch Final Videos
+        env:
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          echo "🎞️ Stitching final videos..."
+          python scripts/stitch_final_videos.py
+
+      - name: Upload Results Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: voiceover-results
-          path: results.json
+          name: production-results
+          path: |
+            video_results.json
+            results.json
+            final_results.json
           retention-days: 7
 
-      - name: Post Results as Comment
-        if: github.event_name == 'workflow_dispatch'
+      - name: Display Final Results
         run: |
-          echo "✅ Voiceover generation complete!"
-          cat results.json
+          echo "🎊 ========================================="
+          echo "   COMPLETE VIDEO PRODUCTION FINISHED!"
+          echo "========================================="
+          cat final_results.json
