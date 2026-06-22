@@ -30,7 +30,7 @@ def run_command(cmd, input_text=None):
     return stdout
 
 def download_youtube_video_with_apify(url, output_path):
-    """Download YouTube video using Apify (bypasses bot detection)"""
+    """Download YouTube video using Apify truefetch/youtube-video-downloader (bypasses bot detection)"""
     print(f"📥 Downloading video via Apify from: {url}")
     
     import requests
@@ -47,36 +47,36 @@ def download_youtube_video_with_apify(url, output_path):
         clean_url = url
     
     print(f"🔗 Clean URL: {clean_url}")
-    print(f"🌐 Starting Apify actor...")
+    print(f"🌐 Starting Apify TrueFetch YouTube Video Downloader...")
     
-    # Start Apify YouTube scraper actor
+    # Start Apify TrueFetch YouTube downloader actor
     run_response = requests.post(
-        'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs',
+        'https://api.apify.com/v2/acts/truefetch~youtube-video-downloader/runs',
         headers={
             'Authorization': f'Bearer {APIFY_TOKEN}',
             'Content-Type': 'application/json'
         },
         json={
-            'startUrls': [{'url': clean_url}],
-            'maxResults': 1,
-            'downloadVideos': True,
-            'downloadFormat': 'mp4',
-            'downloadQuality': '480p'
+            'videoUrls': [clean_url],
+            'downloadQuality': '480p',
+            'outputFormat': 'mp4'
         },
         timeout=30
     )
     
     if not run_response.ok:
+        print(f"❌ Apify API error: {run_response.status_code}")
+        print(f"Response: {run_response.text}")
         raise Exception(f"Apify API error: {run_response.status_code} - {run_response.text}")
     
     run_data = run_response.json()['data']
     run_id = run_data['id']
     
     print(f"✅ Apify run started: {run_id}")
-    print(f"⏳ Waiting for video download...")
+    print(f"⏳ Waiting for video download (this may take 5-10 minutes)...")
     
-    # Poll for completion (max 10 minutes)
-    max_attempts = 120  # 10 minutes (5 sec intervals)
+    # Poll for completion (max 15 minutes for large videos)
+    max_attempts = 180  # 15 minutes (5 sec intervals)
     attempt = 0
     
     while attempt < max_attempts:
@@ -95,73 +95,146 @@ def download_youtube_video_with_apify(url, output_path):
         status_data = status_response.json()['data']
         status = status_data['status']
         
-        if attempt % 6 == 0:  # Log every 30 seconds
-            print(f"⏳ Apify status: {status} (attempt {attempt}/{max_attempts})")
+        if attempt % 12 == 0:  # Log every minute
+            print(f"⏳ Apify status: {status} (attempt {attempt}/{max_attempts}, {attempt*5//60} min)")
         
         if status == 'SUCCEEDED':
             print(f"✅ Apify download complete!")
             break
         elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
-            raise Exception(f'Apify run failed with status: {status}')
+            error_msg = status_data.get('statusMessage', 'Unknown error')
+            print(f"❌ Apify failed: {status} - {error_msg}")
+            raise Exception(f'Apify run failed with status: {status} - {error_msg}')
     
     if attempt >= max_attempts:
-        raise Exception('Apify download timed out after 10 minutes')
+        raise Exception('Apify download timed out after 15 minutes')
     
-    # Get dataset with download URL
-    print(f"📦 Fetching download URL from Apify dataset...")
+    # Get Key-Value store (TrueFetch saves video file here)
+    print(f"📦 Fetching video from Apify Key-Value store...")
     
-    dataset_response = requests.get(
-        f'https://api.apify.com/v2/actor-runs/{run_id}/dataset/items',
+    default_kvs_id = status_data.get('defaultKeyValueStoreId')
+    
+    if not default_kvs_id:
+        print(f"⚠️ No Key-Value store found, trying dataset...")
+        # Fallback: try dataset
+        dataset_response = requests.get(
+            f'https://api.apify.com/v2/actor-runs/{run_id}/dataset/items',
+            headers={'Authorization': f'Bearer {APIFY_TOKEN}'}
+        )
+        
+        if dataset_response.ok:
+            items = dataset_response.json()
+            if items and len(items) > 0:
+                video_item = items[0]
+                
+                # Look for video URL in various possible fields
+                if 'videoUrl' in video_item:
+                    video_url = video_item['videoUrl']
+                elif 'downloadUrl' in video_item:
+                    video_url = video_item['downloadUrl']
+                elif 'fileUrl' in video_item:
+                    video_url = video_item['fileUrl']
+                else:
+                    print(f"⚠️ Dataset item: {video_item}")
+                    raise Exception('No video URL found in dataset')
+                
+                print(f"🔗 Found video URL in dataset: {video_url[:100]}...")
+                return download_file_from_url(video_url, output_path)
+        
+        raise Exception('Could not find video in Key-Value store or dataset')
+    
+    # Try to get OUTPUT key from Key-Value store
+    kvs_response = requests.get(
+        f'https://api.apify.com/v2/key-value-stores/{default_kvs_id}/records/OUTPUT',
         headers={'Authorization': f'Bearer {APIFY_TOKEN}'}
     )
     
-    if not dataset_response.ok:
-        raise Exception(f"Failed to fetch dataset: {dataset_response.status_code}")
+    if kvs_response.ok:
+        output_data = kvs_response.json()
+        
+        if 'videoUrl' in output_data:
+            video_url = output_data['videoUrl']
+        elif 'downloadUrl' in output_data:
+            video_url = output_data['downloadUrl']
+        elif 'fileUrl' in output_data:
+            video_url = output_data['fileUrl']
+        elif 'videos' in output_data and len(output_data['videos']) > 0:
+            video_url = output_data['videos'][0].get('url') or output_data['videos'][0].get('downloadUrl')
+        else:
+            print(f"⚠️ OUTPUT data: {output_data}")
+            raise Exception('No video URL found in Key-Value store OUTPUT')
+        
+        print(f"🔗 Video download URL: {video_url[:100]}...")
+        return download_file_from_url(video_url, output_path)
     
-    items = dataset_response.json()
+    # If OUTPUT doesn't exist, list all keys
+    print(f"⚠️ OUTPUT key not found, listing all keys in store...")
+    keys_response = requests.get(
+        f'https://api.apify.com/v2/key-value-stores/{default_kvs_id}/keys',
+        headers={'Authorization': f'Bearer {APIFY_TOKEN}'}
+    )
     
-    if not items or len(items) == 0:
-        raise Exception('No video found in Apify results')
+    if keys_response.ok:
+        keys_data = keys_response.json()
+        print(f"📋 Available keys: {keys_data}")
+        
+        # Try to find video file key
+        for item in keys_data.get('data', {}).get('items', []):
+            key = item['key']
+            if key.endswith('.mp4') or 'video' in key.lower():
+                print(f"🎬 Found video key: {key}")
+                
+                # Download directly from Key-Value store
+                video_file_response = requests.get(
+                    f'https://api.apify.com/v2/key-value-stores/{default_kvs_id}/records/{key}',
+                    headers={'Authorization': f'Bearer {APIFY_TOKEN}'},
+                    stream=True
+                )
+                
+                if video_file_response.ok:
+                    print(f"⬇️ Downloading video file from Key-Value store...")
+                    
+                    total_size = int(video_file_response.headers.get('content-length', 0))
+                    downloaded = 0
+                    
+                    with open(output_path, 'wb') as f:
+                        for chunk in video_file_response.iter_content(chunk_size=1024*1024):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total_size > 0 and downloaded % (10*1024*1024) == 0:
+                                    progress = (downloaded / total_size) * 100
+                                    print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
+                    
+                    print(f"✅ Video downloaded successfully: {output_path}")
+                    return output_path
     
-    # Get video download URL
-    video_item = items[0]
+    raise Exception('Could not find video file in Apify storage')
+
+def download_file_from_url(url, output_path):
+    """Download file from URL with progress tracking"""
+    import requests
     
-    # Apify might return video in different fields
-    video_url = None
-    if 'videoUrl' in video_item:
-        video_url = video_item['videoUrl']
-    elif 'downloadUrl' in video_item:
-        video_url = video_item['downloadUrl']
-    elif 'url' in video_item:
-        # Use yt-dlp as fallback with the extracted info
-        print(f"⚠️ No direct download URL, using yt-dlp with video info...")
-        return download_youtube_video_fallback(clean_url, output_path)
+    print(f"⬇️ Downloading file from URL...")
     
-    if not video_url:
-        raise Exception('Could not find video download URL in Apify results')
+    response = requests.get(url, stream=True, timeout=600)
     
-    print(f"🔗 Video URL: {video_url[:100]}...")
-    print(f"⬇️ Downloading video file...")
+    if not response.ok:
+        raise Exception(f"Download failed: {response.status_code}")
     
-    # Download video file
-    video_response = requests.get(video_url, stream=True, timeout=600)
-    
-    if not video_response.ok:
-        raise Exception(f"Video download failed: {video_response.status_code}")
-    
-    total_size = int(video_response.headers.get('content-length', 0))
+    total_size = int(response.headers.get('content-length', 0))
     downloaded = 0
     
     with open(output_path, 'wb') as f:
-        for chunk in video_response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+        for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
-                if total_size > 0 and downloaded % (10*1024*1024) == 0:  # Log every 10MB
+                if total_size > 0 and downloaded % (10*1024*1024) == 0:
                     progress = (downloaded / total_size) * 100
-                    print(f"📥 Downloaded: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
+                    print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
     
-    print(f"✅ Video downloaded successfully: {output_path}")
+    print(f"✅ File downloaded successfully: {output_path}")
     return output_path
 
 def download_youtube_video_fallback(url, output_path):
