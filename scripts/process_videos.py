@@ -33,13 +33,24 @@ def download_youtube_video(url, output_path):
     """Download YouTube video in 480p quality"""
     print(f"📥 Downloading video from: {url}")
     
+    # Clean URL (remove tracking parameters)
+    if '?' in url:
+        clean_url = url.split('?')[0]
+    else:
+        clean_url = url
+    
+    print(f"🔗 Clean URL: {clean_url}")
+    
     cmd = [
         'yt-dlp',
-        url,
+        clean_url,
         '-f', 'bestvideo[height<=480]+bestaudio/best[height<=480]',
         '-o', output_path,
         '--merge-output-format', 'mp4',
-        '--no-playlist'
+        '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--extractor-args', 'youtube:player_client=android,web',
+        '--no-check-certificates'
     ]
     
     run_command(cmd)
