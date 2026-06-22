@@ -29,9 +29,16 @@ def run_command(cmd, input_text=None):
         raise Exception(f"Command failed: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{stderr}")
     return stdout
 
-def download_youtube_video(url, output_path):
-    """Download YouTube video in 480p quality"""
-    print(f"📥 Downloading video from: {url}")
+def download_youtube_video_with_apify(url, output_path):
+    """Download YouTube video using Apify (bypasses bot detection)"""
+    print(f"📥 Downloading video via Apify from: {url}")
+    
+    import requests
+    import time
+    
+    APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
+    if not APIFY_TOKEN:
+        raise Exception("APIFY_TOKEN not configured in GitHub secrets")
     
     # Clean URL (remove tracking parameters)
     if '?' in url:
@@ -40,21 +47,140 @@ def download_youtube_video(url, output_path):
         clean_url = url
     
     print(f"🔗 Clean URL: {clean_url}")
+    print(f"🌐 Starting Apify actor...")
+    
+    # Start Apify YouTube scraper actor
+    run_response = requests.post(
+        'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs',
+        headers={
+            'Authorization': f'Bearer {APIFY_TOKEN}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'startUrls': [{'url': clean_url}],
+            'maxResults': 1,
+            'downloadVideos': True,
+            'downloadFormat': 'mp4',
+            'downloadQuality': '480p'
+        },
+        timeout=30
+    )
+    
+    if not run_response.ok:
+        raise Exception(f"Apify API error: {run_response.status_code} - {run_response.text}")
+    
+    run_data = run_response.json()['data']
+    run_id = run_data['id']
+    
+    print(f"✅ Apify run started: {run_id}")
+    print(f"⏳ Waiting for video download...")
+    
+    # Poll for completion (max 10 minutes)
+    max_attempts = 120  # 10 minutes (5 sec intervals)
+    attempt = 0
+    
+    while attempt < max_attempts:
+        time.sleep(5)
+        attempt += 1
+        
+        status_response = requests.get(
+            f'https://api.apify.com/v2/actor-runs/{run_id}',
+            headers={'Authorization': f'Bearer {APIFY_TOKEN}'}
+        )
+        
+        if not status_response.ok:
+            print(f"⚠️ Status check failed, retrying...")
+            continue
+        
+        status_data = status_response.json()['data']
+        status = status_data['status']
+        
+        if attempt % 6 == 0:  # Log every 30 seconds
+            print(f"⏳ Apify status: {status} (attempt {attempt}/{max_attempts})")
+        
+        if status == 'SUCCEEDED':
+            print(f"✅ Apify download complete!")
+            break
+        elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
+            raise Exception(f'Apify run failed with status: {status}')
+    
+    if attempt >= max_attempts:
+        raise Exception('Apify download timed out after 10 minutes')
+    
+    # Get dataset with download URL
+    print(f"📦 Fetching download URL from Apify dataset...")
+    
+    dataset_response = requests.get(
+        f'https://api.apify.com/v2/actor-runs/{run_id}/dataset/items',
+        headers={'Authorization': f'Bearer {APIFY_TOKEN}'}
+    )
+    
+    if not dataset_response.ok:
+        raise Exception(f"Failed to fetch dataset: {dataset_response.status_code}")
+    
+    items = dataset_response.json()
+    
+    if not items or len(items) == 0:
+        raise Exception('No video found in Apify results')
+    
+    # Get video download URL
+    video_item = items[0]
+    
+    # Apify might return video in different fields
+    video_url = None
+    if 'videoUrl' in video_item:
+        video_url = video_item['videoUrl']
+    elif 'downloadUrl' in video_item:
+        video_url = video_item['downloadUrl']
+    elif 'url' in video_item:
+        # Use yt-dlp as fallback with the extracted info
+        print(f"⚠️ No direct download URL, using yt-dlp with video info...")
+        return download_youtube_video_fallback(clean_url, output_path)
+    
+    if not video_url:
+        raise Exception('Could not find video download URL in Apify results')
+    
+    print(f"🔗 Video URL: {video_url[:100]}...")
+    print(f"⬇️ Downloading video file...")
+    
+    # Download video file
+    video_response = requests.get(video_url, stream=True, timeout=600)
+    
+    if not video_response.ok:
+        raise Exception(f"Video download failed: {video_response.status_code}")
+    
+    total_size = int(video_response.headers.get('content-length', 0))
+    downloaded = 0
+    
+    with open(output_path, 'wb') as f:
+        for chunk in video_response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0 and downloaded % (10*1024*1024) == 0:  # Log every 10MB
+                    progress = (downloaded / total_size) * 100
+                    print(f"📥 Downloaded: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
+    
+    print(f"✅ Video downloaded successfully: {output_path}")
+    return output_path
+
+def download_youtube_video_fallback(url, output_path):
+    """Fallback to yt-dlp if Apify doesn't provide direct download"""
+    print(f"📥 Fallback: Using yt-dlp for: {url}")
     
     cmd = [
         'yt-dlp',
-        clean_url,
+        url,
         '-f', 'bestvideo[height<=480]+bestaudio/best[height<=480]',
         '-o', output_path,
         '--merge-output-format', 'mp4',
         '--no-playlist',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--no-check-certificates'
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        '--extractor-args', 'youtube:player_client=android,web'
     ]
     
     run_command(cmd)
-    print(f"✅ Video downloaded: {output_path}")
+    print(f"✅ Video downloaded via fallback: {output_path}")
     return output_path
 
 def get_video_duration(video_path):
@@ -238,9 +364,9 @@ def main():
     print(f"📺 YouTube URL: {youtube_url}")
     print(f"📋 Processing {len(news_data)} news items\n")
     
-    # Step 1: Download source video
+    # Step 1: Download source video using Apify
     source_video = 'source_video.mp4'
-    download_youtube_video(youtube_url, source_video)
+    download_youtube_video_with_apify(youtube_url, source_video)
     
     # Get video properties
     width, height = get_video_resolution(source_video)
