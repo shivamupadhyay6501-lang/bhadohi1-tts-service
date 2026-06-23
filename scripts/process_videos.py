@@ -30,9 +30,10 @@ def run_command(cmd, input_text=None):
     return stdout
 
 def download_youtube_video_with_apify(url, output_path):
-    """Download YouTube video using Apify truefetch/youtube-video-downloader (bypasses bot detection)"""
-    print(f"📥 Downloading video via Apify from: {url}")
+    """Download YouTube video using Apify SDK (official, handles all payload formatting)"""
+    print(f"📥 Downloading video via Apify SDK from: {url}")
     
+    from apify_client import ApifyClient
     import requests
     
     APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
@@ -46,47 +47,52 @@ def download_youtube_video_with_apify(url, output_path):
         clean_url = url
     
     print(f"🔗 Clean URL: {clean_url}")
-    print(f"🌐 Starting Apify TrueFetch YouTube Video Downloader...")
+    print(f"🌐 Initializing Apify SDK client...")
     
-    # Use run-sync-get-dataset-items for faster synchronous execution
-    actor_id = "truefetch~youtube-video-downloader"
-    api_url = f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items?token={APIFY_TOKEN}"
+    # Initialize Apify client with SDK
+    client = ApifyClient(APIFY_TOKEN)
     
-    # CRITICAL: Wrap payload inside "input" key as required by Apify validation
-    payload = {
-        "input": {
-            "video_url": clean_url,
-            "video_quality": "low"  # 480p - faster download
-        }
+    # Prepare input for actor
+    run_input = {
+        "video_url": clean_url,
+        "video_quality": "low"  # 480p for faster processing
     }
     
-    print(f"📦 Payload: {payload}")
-    print(f"⏳ Triggering synchronous run (this may take 5-10 minutes)...")
+    print(f"📦 Run input: {run_input}")
+    print(f"⏳ Starting actor run (this may take 5-10 minutes)...")
     
-    # Synchronous call - waits for completion and returns dataset items
-    response = requests.post(
-        api_url,
-        json=payload,
-        timeout=900  # 15 minute timeout
-    )
+    try:
+        # Run actor and wait for completion (SDK handles everything)
+        run = client.actor("truefetch/youtube-video-downloader").call(run_input=run_input)
+        
+        print(f"✅ Apify actor run completed!")
+        print(f"📊 Run ID: {run['id']}")
+        print(f"📊 Status: {run['status']}")
+        
+        # Get dataset items
+        default_dataset_id = run.get("defaultDatasetId")
+        
+        if not default_dataset_id:
+            raise Exception("No dataset ID found in run result")
+        
+        print(f"📦 Fetching items from dataset: {default_dataset_id}")
+        
+        dataset_items = client.dataset(default_dataset_id).list_items().items
+        
+        if not dataset_items or len(dataset_items) == 0:
+            raise Exception("Apify returned empty dataset")
+        
+        print(f"✅ Found {len(dataset_items)} items in dataset")
+        
+    except Exception as e:
+        print(f"❌ Apify SDK error: {str(e)}")
+        raise Exception(f"Apify execution failed: {str(e)}")
     
-    if response.status_code not in [200, 201]:
-        print(f"❌ Apify API error: {response.status_code}")
-        print(f"Response: {response.text}")
-        raise Exception(f"Apify API error: {response.status_code} - {response.text}")
-    
-    print(f"✅ Apify execution completed!")
-    
-    # Parse dataset items
-    dataset_items = response.json()
-    
-    if not dataset_items or len(dataset_items) == 0:
-        raise Exception("Apify returned empty dataset. No video found.")
-    
+    # Get first item
     first_item = dataset_items[0]
-    print(f"📦 Dataset item keys: {list(first_item.keys())}")
+    print(f"📋 Dataset item keys: {list(first_item.keys())}")
     
-    # Try to find video URL in various possible fields
+    # Find video download URL
     video_url = (
         first_item.get("video_file") or 
         first_item.get("downloadUrl") or 
@@ -97,22 +103,22 @@ def download_youtube_video_with_apify(url, output_path):
     
     if not video_url:
         print(f"⚠️ Full dataset item: {first_item}")
-        raise Exception(f"No video download URL found. Available keys: {list(first_item.keys())}")
+        raise Exception(f"No video URL found. Available keys: {list(first_item.keys())}")
     
     print(f"🔗 Video download URL: {video_url[:100]}...")
     print(f"⬇️ Downloading video file...")
     
-    # Download video file with progress
-    video_response = requests.get(video_url, stream=True, timeout=900)
+    # Download video with progress
+    response = requests.get(video_url, stream=True, timeout=900)
     
-    if not video_response.ok:
-        raise Exception(f"Video download failed: {video_response.status_code}")
+    if not response.ok:
+        raise Exception(f"Video download failed: {response.status_code}")
     
-    total_size = int(video_response.headers.get('content-length', 0))
+    total_size = int(response.headers.get('content-length', 0))
     downloaded = 0
     
     with open(output_path, 'wb') as f:
-        for chunk in video_response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+        for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)

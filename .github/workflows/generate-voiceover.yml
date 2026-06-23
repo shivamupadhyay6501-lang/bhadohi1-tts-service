@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install boto3 requests
+          pip install boto3 requests apify-client
 
       - name: Step 1 - Download and Process Video Clips
         env:
