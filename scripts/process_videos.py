@@ -92,18 +92,39 @@ def download_youtube_video_with_apify(url, output_path):
     first_item = dataset_items[0]
     print(f"📋 Dataset item keys: {list(first_item.keys())}")
     
-    # Find video download URL
-    video_url = (
-        first_item.get("video_file") or 
-        first_item.get("downloadUrl") or 
-        first_item.get("url") or
-        first_item.get("videoUrl") or
-        first_item.get("fileUrl")
-    )
+    # CRITICAL FIX: TrueFetch stores video URL in nested 'video' object
+    video_url = None
+    
+    # Check if 'video' key exists and is a dict with URL
+    video_data = first_item.get("video")
+    
+    if isinstance(video_data, dict):
+        # Nested object with download URL
+        video_url = (
+            video_data.get("url") or 
+            video_data.get("download_url") or 
+            video_data.get("downloadUrl") or
+            video_data.get("fileUrl")
+        )
+        print(f"🔍 Found 'video' object with keys: {list(video_data.keys())}")
+    elif isinstance(video_data, str):
+        # Direct string URL
+        video_url = video_data
+    
+    # Fallback: check top-level keys
+    if not video_url:
+        video_url = (
+            first_item.get("video_file") or 
+            first_item.get("downloadUrl") or 
+            first_item.get("url") or
+            first_item.get("videoUrl") or
+            first_item.get("fileUrl")
+        )
     
     if not video_url:
         print(f"⚠️ Full dataset item: {first_item}")
-        raise Exception(f"No video URL found. Available keys: {list(first_item.keys())}")
+        print(f"⚠️ Video object: {video_data}")
+        raise Exception(f"No video URL found in nested structure. Available keys: {list(first_item.keys())}")
     
     print(f"🔗 Video download URL: {video_url[:100]}...")
     print(f"⬇️ Downloading video file...")
