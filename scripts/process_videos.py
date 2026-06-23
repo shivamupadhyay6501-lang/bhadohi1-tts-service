@@ -178,42 +178,35 @@ def get_video_resolution(video_path):
 
 def calculate_crop_filter(width, height):
     """
-    Calculate safe center crop to remove watermarks/borders
+    Calculate balanced center crop to remove watermarks/borders
     
-    Assumptions based on typical news channel layout:
-    - Top watermark: 8% of height
-    - Bottom ticker: 12% of height
-    - Left border: 6% of width
-    - Right border: 6% of width
+    Crop strategy:
+    - Left: 8% (border)
+    - Right: 12% (SATYAM NEWS logo area)
+    - Top: 10% (header area)
+    - Bottom: 22% (news ticker strip)
     
-    Output: 1280x720 (HD) after crop
+    Output: Cropped area suitable for 9:16 vertical format
     """
-    # Calculate safe area
-    left_crop = int(width * 0.06)
-    right_crop = int(width * 0.06)
-    top_crop = int(height * 0.08)
-    bottom_crop = int(height * 0.12)
+    # Calculate crop amounts
+    left_crop = int(width * 0.08)    # 8% from left
+    right_crop = int(width * 0.12)   # 12% from right (logo area)
+    top_crop = int(height * 0.10)    # 10% from top
+    bottom_crop = int(height * 0.22) # 22% from bottom (ticker)
     
     # Crop dimensions
     crop_width = width - left_crop - right_crop
     crop_height = height - top_crop - bottom_crop
     
-    # Ensure 16:9 aspect ratio
-    target_aspect = 16 / 9
-    current_aspect = crop_width / crop_height
+    # Position (where to start crop)
+    x_offset = left_crop
+    y_offset = top_crop
     
-    if current_aspect > target_aspect:
-        # Too wide, reduce width
-        crop_width = int(crop_height * target_aspect)
-    else:
-        # Too tall, reduce height
-        crop_height = int(crop_width / target_aspect)
+    print(f"   Original: {width}x{height}")
+    print(f"   Crop: L={left_crop}px R={right_crop}px T={top_crop}px B={bottom_crop}px")
+    print(f"   Result: {crop_width}x{crop_height}")
     
-    # Recalculate position to center the crop
-    x_offset = (width - crop_width) // 2
-    y_offset = (height - crop_height) // 2
-    
-    return f"crop={crop_width}:{crop_height}:{x_offset}:{y_offset},scale=1280:720"
+    return f"crop={crop_width}:{crop_height}:{x_offset}:{y_offset}"
 
 def timestamp_to_seconds(timestamp):
     """Convert HH:MM:SS or MM:SS to seconds"""

@@ -89,16 +89,17 @@ jobs:
           echo "🎙️ Generating voiceovers..."
           python scripts/generate_voiceovers.py
 
-      - name: Step 3 - Stitch Final Videos
+      - name: Step 3 - Create Vertical Reels (9:16 Format)
         env:
+          NEWS_DATA: ${{ inputs.news_data }}
           R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
           R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
         run: |
-          echo "🎞️ Stitching final videos..."
-          python scripts/stitch_final_videos.py
+          echo "🎨 Creating vertical Instagram Reels..."
+          python scripts/create_vertical_reels.py
 
       - name: Upload Results Artifacts
         uses: actions/upload-artifact@v4
@@ -107,12 +108,12 @@ jobs:
           path: |
             video_results.json
             results.json
-            final_results.json
+            reel_results.json
           retention-days: 7
 
       - name: Display Final Results
         run: |
           echo "🎊 ========================================="
-          echo "   COMPLETE VIDEO PRODUCTION FINISHED!"
+          echo "   VERTICAL REEL PRODUCTION FINISHED!"
           echo "========================================="
-          cat final_results.json
+          cat reel_results.json
