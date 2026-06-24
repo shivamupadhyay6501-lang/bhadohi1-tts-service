@@ -57,24 +57,26 @@ def upload_to_r2(file_path, remote_key, content_type='video/mp4'):
 
 def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     """
-    Create vertical Instagram Reel format video
+    Create vertical Instagram Reel format video with blurred background
     
     Layout:
-    - Top 15%: Headline bar (blue gradient + white text)
-    - Middle 37%: Video clip (white border frame)
-    - Bottom 48%: Caption area (yellow text on dark bg)
+    - Top: Blue header with title (white text)
+    - Middle: Video clip with white border
+    - Bottom: Blurred video background with full script text (yellow thick text)
     
     Total: 1080x1920 (9:16 vertical)
     """
     number = item['number']
     title = item['title']
+    script = item.get('script', '')
     
     print(f"  🎨 Creating vertical reel for #{number}: {title}")
     
     output_filename = f"reel_{number}.mp4"
     
-    # Escape title for FFmpeg drawtext
-    title_escaped = title.replace("'", "'\\''").replace(":", "\\:")
+    # Escape title and script for FFmpeg drawtext
+    title_escaped = title.replace("'", "'\\''").replace(":", "\\:").replace("%", "\\%")
+    script_escaped = script.replace("'", "'\\''").replace(":", "\\:").replace("%", "\\%")
     
     # Get video duration for color sources
     video_duration_cmd = [
@@ -87,17 +89,16 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     duration_output = run_command(video_duration_cmd)
     duration = float(duration_output.strip())
     
-    # Complex filter for vertical reel layout
-    # All three sections must be 1080px wide for vstack to work
-    # Using Noto Sans (has Hindi/Devanagari support in fonts-noto package)
+    # Complex filter for vertical reel layout with blurred background
+    # NO CAPTIONS - Just static full script text on blurred background
     filter_complex = f"""
     color=c=#1e3a8a:s=1080x288:d={duration}[top_bar];
-    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=44:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black[top_with_text];
+    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=48:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=4:bordercolor=black[top_with_text];
     [0:v]scale=940:700:force_original_aspect_ratio=decrease,pad=940:700:(ow-iw)/2:(oh-ih)/2:black,pad=1010:730:35:15:white[video_inner];
     [video_inner]pad=1080:730:35:0:black[video_framed];
-    color=c=#000000@0.85:s=1080x902:d={duration}[bottom_area];
-    [bottom_area]subtitles={srt_path}:force_style='FontName=Noto Sans,FontSize=42,PrimaryColour=&H00FFD700,OutlineColour=&H00000000,Outline=3,BorderStyle=1,Alignment=1,MarginL=50,MarginR=50,MarginV=60'[bottom_with_subs];
-    [top_with_text][video_framed][bottom_with_subs]vstack=inputs=3[v]
+    [0:v]scale=1080:902:force_original_aspect_ratio=fill,boxblur=20:20[blurred_bg];
+    [blurred_bg]drawtext=text='{script_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=38:fontcolor=yellow:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:line_spacing=10[bottom_with_script];
+    [top_with_text][video_framed][bottom_with_script]vstack=inputs=3[v]
     """
     
     cmd = [
