@@ -182,7 +182,7 @@ def calculate_crop_filter(width, height):
     
     Crop strategy:
     - Left: 8% (border)
-    - Right: 12% (SATYAM NEWS logo area)
+    - Right: 17% (SATYAM NEWS logo area - increased from 12%)
     - Top: 10% (header area)
     - Bottom: 22% (news ticker strip)
     
@@ -190,7 +190,7 @@ def calculate_crop_filter(width, height):
     """
     # Calculate crop amounts
     left_crop = int(width * 0.08)    # 8% from left
-    right_crop = int(width * 0.12)   # 12% from right (logo area)
+    right_crop = int(width * 0.17)   # 17% from right (SATYAM NEWS logo - increased!)
     top_crop = int(height * 0.10)    # 10% from top
     bottom_crop = int(height * 0.22) # 22% from bottom (ticker)
     
