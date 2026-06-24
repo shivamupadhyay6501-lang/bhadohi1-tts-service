@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 import math
 
 def run_command(cmd):
-    """Run shell command and return output"""
+    """Run shell command and a output"""
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -156,25 +156,25 @@ def process_single_item(args):
         print(f"📰 Processing Item #{number}: {item['title']}")
         print(f"{'='*60}")
         
-        # Download clip, voiceover, and SRT from R2
-        clip_key = f"videos/clips/clip_{timestamp}_{number}.mp4"
+        # Use local clip path (no download needed!)
+        clip_local = f"clip_{number}.mp4"
+        
+        # Voiceover and SRT still come from R2
         voiceover_key = f"voiceovers/piper_{timestamp}_{number}.wav"
         srt_key = f"captions/piper_{timestamp}_{number}.srt"
         
-        clip_local = f"temp_clip_{number}.mp4"
         voiceover_local = f"temp_voice_{number}.wav"
         srt_local = f"temp_srt_{number}.srt"
         
-        # Download from R2
-        download_from_r2(clip_key, clip_local)
+        # Download voiceover and SRT from R2
         download_from_r2(voiceover_key, voiceover_local)
         download_from_r2(srt_key, srt_local)
         
-        # Create vertical reel
+        # Create vertical reel using local clip
         result = create_vertical_reel(item, clip_local, voiceover_local, srt_local, timestamp)
         
-        # Cleanup temp files
-        for f in [clip_local, voiceover_local, srt_local]:
+        # Cleanup temp files (but keep local clip for other batches if needed)
+        for f in [voiceover_local, srt_local]:
             if os.path.exists(f):
                 os.remove(f)
         
@@ -273,6 +273,20 @@ def main():
     # Upload results to R2
     results_key = f"summaries/reels_batch_{timestamp}.json"
     results_url = upload_to_r2('reel_results.json', results_key, 'application/json')
+    
+    # Cleanup: Remove all local clips and source video after processing
+    print(f"\n🧹 Cleaning up local files...")
+    for item in news_data:
+        clip_file = f"clip_{item['number']}.mp4"
+        if os.path.exists(clip_file):
+            os.remove(clip_file)
+            print(f"   Deleted: {clip_file}")
+    
+    if os.path.exists('source_video.mp4'):
+        os.remove('source_video.mp4')
+        print(f"   Deleted: source_video.mp4")
+    
+    print(f"✅ Local cleanup complete!\n")
     
     print(f"\n{'='*70}")
     print(f"🎊 VERTICAL REEL CREATION COMPLETE!")

@@ -335,12 +335,12 @@ def main():
     crop_filter = calculate_crop_filter(width, height)
     print(f"✂️ Crop filter: {crop_filter}\n")
     
-    # Step 2: Upload source video to R2
-    source_key = f"videos/raw/source_{timestamp}.mp4"
-    source_url = upload_to_r2(source_video, source_key, 'video/mp4')
-    print(f"📦 Source video available at: {source_url}\n")
+    # Step 2: Don't upload source video (save storage!)
+    # source_key = f"videos/raw/source_{timestamp}.mp4"
+    # source_url = upload_to_r2(source_video, source_key, 'video/mp4')
+    print(f"✅ Source video kept local (not uploaded to R2)\n")
     
-    # Step 3: Process each news item
+    # Step 3: Process each news item (keep clips local)
     video_clips = []
     
     for item in news_data:
@@ -376,21 +376,23 @@ def main():
             trimmed_clip = f"clip_{number}.mp4"
             trim_clip_to_duration(raw_clip, voiceover_duration, trimmed_clip)
             
-            # Upload clip to R2
-            clip_key = f"videos/clips/clip_{timestamp}_{number}.mp4"
-            clip_url = upload_to_r2(trimmed_clip, clip_key, 'video/mp4')
+            # Don't upload clip to R2 (save storage! - will be used locally by reel creator)
+            # clip_key = f"videos/clips/clip_{timestamp}_{number}.mp4"
+            # clip_url = upload_to_r2(trimmed_clip, clip_key, 'video/mp4')
+            
+            print(f"✅ Clip saved locally: {trimmed_clip}")
             
             video_clips.append({
                 'number': number,
                 'title': title,
-                'clipUrl': clip_url,
+                'localClipPath': trimmed_clip,  # Keep local path instead of URL
                 'duration': voiceover_duration,
                 'status': 'success'
             })
             
-            # Cleanup
-            if os.path.exists(trimmed_clip):
-                os.remove(trimmed_clip)
+            # Don't cleanup yet - reel creator will need these files!
+            # if os.path.exists(trimmed_clip):
+            #     os.remove(trimmed_clip)
             
             print(f"✅ Clip #{number} processed successfully\n")
             
@@ -407,7 +409,6 @@ def main():
     results = {
         'batchId': timestamp,
         'youtubeUrl': youtube_url,
-        'sourceVideoUrl': source_url,
         'totalItems': len(news_data),
         'successCount': sum(1 for c in video_clips if c.get('status') == 'success'),
         'clips': video_clips
