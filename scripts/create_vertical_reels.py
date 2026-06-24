@@ -96,7 +96,7 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=48:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=4:bordercolor=black[top_with_text];
     [0:v]scale=940:700:force_original_aspect_ratio=decrease,pad=940:700:(ow-iw)/2:(oh-ih)/2:black,pad=1010:730:35:15:white[video_inner];
     [video_inner]pad=1080:730:35:0:black[video_framed];
-    [0:v]scale=1080:902:force_original_aspect_ratio=fill,boxblur=20:20[blurred_bg];
+    [0:v]scale=1080:902:force_original_aspect_ratio=increase,crop=1080:902,boxblur=20:20[blurred_bg];
     [blurred_bg]drawtext=text='{script_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=38:fontcolor=yellow:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:line_spacing=10[bottom_with_script];
     [top_with_text][video_framed][bottom_with_script]vstack=inputs=3[v]
     """
