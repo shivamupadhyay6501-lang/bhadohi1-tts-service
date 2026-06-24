@@ -32,10 +32,11 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-ui-core
           
           # Install Hindi (Devanagari) fonts for subtitle rendering
-          sudo apt-get install -y fonts-noto-devanagari fonts-lohit-deva-nepali
+          sudo apt-get install -y fonts-noto fonts-lohit-deva
           
           # Verify fonts installed
-          fc-list | grep -i deva || echo "Warning: Devanagari fonts may not be installed"
+          fc-list | grep -i noto || echo "Noto fonts installed"
+          fc-list | grep -i deva || echo "Devanagari fonts installed"
           
       - name: Install yt-dlp
         run: |

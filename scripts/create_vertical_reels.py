@@ -89,13 +89,14 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     
     # Complex filter for vertical reel layout
     # All three sections must be 1080px wide for vstack to work
+    # Using Noto Sans (has Hindi/Devanagari support in fonts-noto package)
     filter_complex = f"""
     color=c=#1e3a8a:s=1080x288:d={duration}[top_bar];
-    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf:fontsize=44:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black[top_with_text];
+    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=44:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black[top_with_text];
     [0:v]scale=940:700:force_original_aspect_ratio=decrease,pad=940:700:(ow-iw)/2:(oh-ih)/2:black,pad=1010:730:35:15:white[video_inner];
     [video_inner]pad=1080:730:35:0:black[video_framed];
     color=c=#000000@0.85:s=1080:902:d={duration}[bottom_area];
-    [bottom_area]subtitles={srt_path}:force_style='FontName=Noto Sans Devanagari,FontSize=42,PrimaryColour=&H00FFD700,OutlineColour=&H00000000,Outline=3,BorderStyle=1,Alignment=1,MarginL=50,MarginR=50,MarginV=60'[bottom_with_subs];
+    [bottom_area]subtitles={srt_path}:force_style='FontName=Noto Sans,FontSize=42,PrimaryColour=&H00FFD700,OutlineColour=&H00000000,Outline=3,BorderStyle=1,Alignment=1,MarginL=50,MarginR=50,MarginV=60'[bottom_with_subs];
     [top_with_text][video_framed][bottom_with_subs]vstack=inputs=3[v]
     """
     
