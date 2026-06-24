@@ -91,13 +91,14 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     
     # Complex filter for vertical reel layout with blurred background
     # NO CAPTIONS - Just static full script text on blurred background
+    # Using DejaVu Sans (pre-installed, supports Hindi)
     filter_complex = f"""
     color=c=#1e3a8a:s=1080x288:d={duration}[top_bar];
-    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=48:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=4:bordercolor=black[top_with_text];
+    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=4:bordercolor=black[top_with_text];
     [0:v]scale=940:700:force_original_aspect_ratio=decrease,pad=940:700:(ow-iw)/2:(oh-ih)/2:black,pad=1010:730:35:15:white[video_inner];
     [video_inner]pad=1080:730:35:0:black[video_framed];
     [0:v]scale=1080:902:force_original_aspect_ratio=increase,crop=1080:902,boxblur=20:20[blurred_bg];
-    [blurred_bg]drawtext=text='{script_escaped}':fontfile=/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf:fontsize=38:fontcolor=yellow:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:line_spacing=10[bottom_with_script];
+    [blurred_bg]drawtext=text='{script_escaped}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=40:fontcolor=yellow:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:line_spacing=10[bottom_with_script];
     [top_with_text][video_framed][bottom_with_script]vstack=inputs=3[v]
     """
     
