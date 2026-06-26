@@ -57,28 +57,22 @@ def upload_to_r2(file_path, remote_key, content_type='video/mp4'):
 
 def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     """
-    Create vertical Instagram Reel format video with blurred background
+    Create vertical Instagram Reel format video - SIMPLE LAYOUT
     
     Layout:
-    - Top: Blue header with title (white text)
-    - Middle: Video clip with white border
-    - Bottom: Blurred video background with full script text (yellow thick text)
+    - Top 50%: Real news footage clip
+    - Bottom 50%: AI Anchor video (trimmed from start to match voiceover duration)
     
     Total: 1080x1920 (9:16 vertical)
     """
     number = item['number']
     title = item['title']
-    script = item.get('script', '')
     
     print(f"  🎨 Creating vertical reel for #{number}: {title}")
     
     output_filename = f"reel_{number}.mp4"
     
-    # Escape title and script for FFmpeg drawtext
-    title_escaped = title.replace("'", "'\\''").replace(":", "\\:").replace("%", "\\%")
-    script_escaped = script.replace("'", "'\\''").replace(":", "\\:").replace("%", "\\%")
-    
-    # Get video duration for color sources
+    # Get voiceover duration
     video_duration_cmd = [
         'ffprobe',
         '-v', 'error',
@@ -89,32 +83,33 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     duration_output = run_command(video_duration_cmd)
     duration = float(duration_output.strip())
     
-    # Complex filter for vertical reel layout with blurred background
-    # NO CAPTIONS - Just static full script text on blurred background
-    # Using DejaVu Sans (pre-installed, supports Hindi)
+    print(f"  ⏱️ Voiceover duration: {duration:.2f}s")
+    
+    # Path to anchor video (in repo assets folder)
+    anchor_video = 'assets/anchor.mp4'
+    
+    # Simple filter: Stack news clip on top, trimmed anchor on bottom
+    # Trim anchor from 0:00 to duration (from start)
     filter_complex = f"""
-    color=c=#1e3a8a:s=1080x288:d={duration}[top_bar];
-    [top_bar]drawtext=text='{title_escaped}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:borderw=4:bordercolor=black[top_with_text];
-    [0:v]scale=940:700:force_original_aspect_ratio=decrease,pad=940:700:(ow-iw)/2:(oh-ih)/2:black,pad=1010:730:35:15:white[video_inner];
-    [video_inner]pad=1080:730:35:0:black[video_framed];
-    [0:v]scale=1080:902:force_original_aspect_ratio=increase,crop=1080:902,boxblur=20:20[blurred_bg];
-    [blurred_bg]drawtext=text='{script_escaped}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=40:fontcolor=yellow:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:line_spacing=10[bottom_with_script];
-    [top_with_text][video_framed][bottom_with_script]vstack=inputs=3[v]
+    [0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[top_news];
+    [1:v]trim=0:{duration},scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setpts=PTS-STARTPTS[bottom_anchor];
+    [top_news][bottom_anchor]vstack=inputs=2[v]
     """
     
     cmd = [
         'ffmpeg',
-        '-i', clip_path,
-        '-i', voiceover_path,
+        '-i', clip_path,           # Input 0: News clip
+        '-i', anchor_video,        # Input 1: Anchor video
+        '-i', voiceover_path,      # Input 2: Voiceover audio
         '-filter_complex', filter_complex,
-        '-map', '[v]',
-        '-map', '1:a',  # Audio from voiceover only
+        '-map', '[v]',             # Use stacked video
+        '-map', '2:a',             # Use voiceover audio only
         '-c:v', 'libx264',
-        '-crf', '26',
+        '-crf', '23',
         '-preset', 'faster',
         '-c:a', 'aac',
         '-b:a', '128k',
-        '-shortest',
+        '-t', str(duration),       # Ensure output matches voiceover duration
         '-y',
         output_filename
     ]
@@ -159,24 +154,19 @@ def process_single_item(args):
         # Use local clip path (no download needed!)
         clip_local = f"clip_{number}.mp4"
         
-        # Voiceover and SRT still come from R2
+        # Voiceover still comes from R2 (no SRT needed anymore!)
         voiceover_key = f"voiceovers/piper_{timestamp}_{number}.wav"
-        srt_key = f"captions/piper_{timestamp}_{number}.srt"
-        
         voiceover_local = f"temp_voice_{number}.wav"
-        srt_local = f"temp_srt_{number}.srt"
         
-        # Download voiceover and SRT from R2
+        # Download voiceover from R2
         download_from_r2(voiceover_key, voiceover_local)
-        download_from_r2(srt_key, srt_local)
         
-        # Create vertical reel using local clip
-        result = create_vertical_reel(item, clip_local, voiceover_local, srt_local, timestamp)
+        # Create vertical reel using local clip (no srt_path needed)
+        result = create_vertical_reel(item, clip_local, voiceover_local, None, timestamp)
         
-        # Cleanup temp files (but keep local clip for other batches if needed)
-        for f in [voiceover_local, srt_local]:
-            if os.path.exists(f):
-                os.remove(f)
+        # Cleanup temp files
+        if os.path.exists(voiceover_local):
+            os.remove(voiceover_local)
         
         print(f"✅ Item #{number} complete!")
         return result
