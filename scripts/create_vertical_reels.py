@@ -118,10 +118,11 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     anchor_video = 'assets/anchor.mp4'
     
     # Simple filter: Stack news clip on top, trimmed anchor on bottom
-    # Trim anchor from 0:00 to duration (from start)
+    # Trim anchor from 0:00 to duration (from start) with setpts for proper timing
+    # Both videos will have keyframes at start = NO FREEZE!
     filter_complex = f"""
     [0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[top_news];
-    [1:v]trim=0:{duration},scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setpts=PTS-STARTPTS[bottom_anchor];
+    [1:v]trim=start=0:duration={duration},setpts=PTS-STARTPTS,scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[bottom_anchor];
     [top_news][bottom_anchor]vstack=inputs=2[v]
     """
     

@@ -221,18 +221,27 @@ def timestamp_to_seconds(timestamp):
         return int(parts[0])
 
 def extract_and_crop_clip(source_video, start_time, end_time, output_path, crop_filter):
-    """Extract clip from source video and apply center crop"""
+    """Extract clip from source video and apply center crop with FREQUENT KEYFRAMES"""
     print(f"✂️ Extracting clip: {start_time} to {end_time}")
+    
+    # Convert timestamps to seconds for calculation
+    start_seconds = timestamp_to_seconds(start_time)
+    end_seconds = timestamp_to_seconds(end_time)
+    duration = end_seconds - start_seconds
     
     cmd = [
         'ffmpeg',
+        '-ss', start_time,        # ✅ Seek BEFORE input (faster, accurate)
         '-i', source_video,
-        '-ss', start_time,
-        '-to', end_time,
+        '-t', str(duration),      # Duration instead of end time
         '-vf', crop_filter,
         '-c:v', 'libx264',
         '-crf', '23',
         '-preset', 'fast',
+        '-g', '15',               # ✅ GOP size 15 (keyframe every 0.5s @ 30fps)
+        '-keyint_min', '15',      # ✅ Minimum keyframe interval
+        '-sc_threshold', '0',     # ✅ Disable scene change detection
+        '-force_key_frames', 'expr:gte(t,0)',  # ✅ Force keyframe at start
         '-c:a', 'aac',
         '-b:a', '128k',
         '-y',
@@ -240,12 +249,13 @@ def extract_and_crop_clip(source_video, start_time, end_time, output_path, crop_
     ]
     
     run_command(cmd)
-    print(f"✅ Clip extracted: {output_path}")
+    print(f"✅ Clip extracted with frequent keyframes (no freeze!): {output_path}")
     return output_path
 
 def trim_clip_to_duration(input_clip, target_duration, output_path):
     """
     Trim clip to match target duration by extracting middle portion
+    RE-ENCODE with keyframe at start (no freeze!)
     """
     clip_duration = get_video_duration(input_clip)
     
@@ -259,14 +269,22 @@ def trim_clip_to_duration(input_clip, target_duration, output_path):
     excess = clip_duration - target_duration
     start_offset = excess / 2
     
-    print(f"⏱️ Trimming to {target_duration}s (extracting middle from {clip_duration}s clip)")
+    print(f"⏱️ Trimming to {target_duration}s with forced keyframe at start (no freeze!)")
     
     cmd = [
         'ffmpeg',
+        '-ss', str(start_offset),      # ✅ Seek BEFORE input
         '-i', input_clip,
-        '-ss', str(start_offset),
         '-t', str(target_duration),
-        '-c', 'copy',
+        '-c:v', 'libx264',             # ✅ RE-ENCODE (not copy!)
+        '-crf', '23',
+        '-preset', 'fast',
+        '-g', '15',                    # ✅ Keyframe every 0.5s
+        '-keyint_min', '15',           # ✅ Minimum keyframe interval
+        '-sc_threshold', '0',          # ✅ Disable scene detection
+        '-force_key_frames', 'expr:eq(n,0)',  # ✅ Force keyframe at frame 0
+        '-c:a', 'aac',
+        '-b:a', '128k',
         '-y',
         output_path
     ]
@@ -277,7 +295,7 @@ def trim_clip_to_duration(input_clip, target_duration, output_path):
     if os.path.exists(input_clip):
         os.remove(input_clip)
     
-    print(f"✅ Clip trimmed: {output_path}")
+    print(f"✅ Clip trimmed with keyframe at start (instant playback!): {output_path}")
     return output_path
 
 def upload_to_r2(file_path, remote_key, content_type='video/mp4'):

@@ -26,6 +26,11 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Fix Anchor Video Keyframes (One-time optimization)
+        run: |
+          echo "🔧 Fixing anchor.mp4 keyframe spacing..."
+          python scripts/fix_anchor_keyframes.py || echo "Anchor already fixed or not needed"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -133,6 +138,19 @@ jobs:
         run: |
           echo "💾 Saving reels metadata to Firestore..."
           python scripts/save_to_firestore.py
+
+      - name: Step 5 - Cleanup Old Reels (Auto-Delete Previous Batch)
+        env:
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        run: |
+          echo "🧹 Cleaning up old reels from previous workflow..."
+          python scripts/cleanup_old_reels.py
 
       - name: Upload Results Artifacts
         uses: actions/upload-artifact@v4
