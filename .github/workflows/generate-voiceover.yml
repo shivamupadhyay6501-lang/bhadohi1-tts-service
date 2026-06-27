@@ -61,30 +61,28 @@ jobs:
           sudo chmod a+rx /usr/local/bin/yt-dlp
           yt-dlp --version
 
-      - name: Cache Kokoro Binary and Model
+      - name: Cache Kokoro Model Files
         id: cache-kokoro
         uses: actions/cache@v3
         with:
           path: |
-            kokoro
+            kokoro-v1.0.onnx
             voices
-          key: kokoro-hindi-psi-v1
+          key: kokoro-v1-hindi-psi
 
-      - name: Download Kokoro TTS (if not cached)
+      - name: Download Kokoro Model (if not cached)
         if: steps.cache-kokoro.outputs.cache-hit != 'true'
         run: |
-          echo "📥 Downloading Kokoro TTS..."
-          wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-v0.1.0/kokoro-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzf kokoro-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
-          chmod +x kokoro
+          echo "📥 Downloading Kokoro v1.0 model..."
+          wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
           
-          echo "📥 Downloading Hindi Psi voice model..."
+          echo "📥 Downloading Hindi Psi voice from HuggingFace..."
           mkdir -p voices
-          wget -O voices/hm_psi.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-v0.1.0/kokoro-v0.19_hm_psi.onnx"
+          wget -O voices/hm_psi.bin "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/hm_psi.pt"
 
       - name: Install Python dependencies
         run: |
-          pip install boto3 requests apify-client
+          pip install boto3 requests apify-client kokoro-onnx onnxruntime soundfile
 
       - name: Step 1 - Download and Process Video Clips
         env:

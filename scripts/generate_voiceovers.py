@@ -3,6 +3,9 @@ import json
 import subprocess
 import boto3
 from pathlib import Path
+from kokoro_onnx import Kokoro
+import soundfile as sf
+import numpy as np
 
 def generate_srt(text, duration):
     """Generate simple SRT captions"""
@@ -34,26 +37,27 @@ def generate_voiceover_with_kokoro(text, output_path):
     """Generate voiceover using Kokoro TTS with hm-psi voice at 1.25x speed"""
     print(f"🎙️ Generating voiceover with Kokoro (hm-psi) at 1.25x speed: {text[:50]}...")
     
-    # Run Kokoro TTS with Psi voice at 1.25x speed
-    cmd = [
-        './kokoro',
-        '--text', text,
-        '--voice', 'voices/hm_psi.onnx',
-        '--speed', '1.25',  # 1.25x faster speech
-        '--output', output_path
-    ]
+    # Initialize Kokoro with model and voice
+    model_path = "kokoro-v1.0.onnx"
+    voice_path = "voices/hm_psi.bin"
     
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    if not os.path.exists(model_path):
+        raise Exception(f"❌ Kokoro model not found: {model_path}")
+    if not os.path.exists(voice_path):
+        raise Exception(f"❌ Voice file not found: {voice_path}")
     
-    stdout, stderr = process.communicate()
+    # Create Kokoro instance
+    kokoro = Kokoro(model_path, voice_path)
     
-    if process.returncode != 0:
-        raise Exception(f"Kokoro TTS failed: {stderr}")
+    # Generate audio samples at 1.25x speed
+    samples, sample_rate = kokoro.create(text, speed=1.25)
+    
+    # Convert to numpy array if needed
+    if not isinstance(samples, np.ndarray):
+        samples = np.array(samples, dtype=np.float32)
+    
+    # Save to WAV file
+    sf.write(output_path, samples, sample_rate)
     
     print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
     return output_path
