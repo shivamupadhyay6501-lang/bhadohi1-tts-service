@@ -55,6 +55,35 @@ def upload_to_r2(file_path, remote_key, content_type='video/mp4'):
     public_url = f"{r2_public_url}/{remote_key}"
     return public_url
 
+def extract_thumbnail_from_clip(clip_path, output_path):
+    """Extract thumbnail from middle of video clip"""
+    # Get clip duration
+    duration_cmd = [
+        'ffprobe',
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        clip_path
+    ]
+    duration_output = run_command(duration_cmd)
+    duration = float(duration_output.strip())
+    
+    # Extract frame from middle
+    middle_time = duration / 2
+    
+    cmd = [
+        'ffmpeg',
+        '-ss', str(middle_time),
+        '-i', clip_path,
+        '-vframes', '1',
+        '-vf', 'scale=360:640',  # Optimized size for fast loading
+        '-q:v', '2',  # High quality
+        '-y',
+        output_path
+    ]
+    run_command(cmd)
+    print(f"  📸 Thumbnail extracted from middle: {output_path}")
+
 def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
     """
     Create vertical Instagram Reel format video - SIMPLE LAYOUT
@@ -118,17 +147,27 @@ def create_vertical_reel(item, clip_path, voiceover_path, srt_path, timestamp):
         run_command(cmd)
         print(f"  ✅ Reel created: {output_filename}")
         
-        # Upload to R2
+        # Generate thumbnail from clip (middle frame)
+        thumbnail_filename = f"thumb_{number}.jpg"
+        extract_thumbnail_from_clip(clip_path, thumbnail_filename)
+        
+        # Upload reel to R2
         reel_key = f"reels/reel_{timestamp}_{number}.mp4"
         reel_url = upload_to_r2(output_filename, reel_key, 'video/mp4')
         
+        # Upload thumbnail to R2
+        thumb_key = f"thumbnails/thumb_{timestamp}_{number}.jpg"
+        thumb_url = upload_to_r2(thumbnail_filename, thumb_key, 'image/jpeg')
+        
         # Cleanup
         os.remove(output_filename)
+        os.remove(thumbnail_filename)
         
         return {
             'number': number,
             'title': title,
             'reelUrl': reel_url,
+            'thumbnailUrl': thumb_url,
             'status': 'success'
         }
         

@@ -47,7 +47,7 @@ def save_reel_to_firestore(reel_data, news_item):
         'importance': news_item.get('importance', 'medium'),
         'video_url': reel_data['reelUrl'],
         'audio_url': news_item.get('voiceoverUrl', ''),
-        'thumbnail_url': reel_data.get('reelUrl'),  # Use video URL as thumbnail
+        'thumbnail_url': reel_data.get('thumbnailUrl', reel_data['reelUrl']),  # Use generated thumbnail
         'type': 'short',
         'duration': news_item.get('duration', '0:45'),
         'source': 'Bhadohi1',
