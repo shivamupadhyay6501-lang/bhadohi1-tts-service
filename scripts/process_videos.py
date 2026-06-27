@@ -31,8 +31,8 @@ def run_command(cmd, input_text=None):
     return stdout
 
 def download_youtube_video_with_cobalt(url, output_path):
-    """Download YouTube video using cobalt.tools v10 API (free, 20 requests/hour)"""
-    print(f"📥 Downloading video via cobalt.tools v10 API from: {url}")
+    """Download YouTube video using cobalt public instance (no auth required)"""
+    print(f"📥 Downloading video via cobalt public instance from: {url}")
     
     import requests
     
@@ -43,91 +43,106 @@ def download_youtube_video_with_cobalt(url, output_path):
         clean_url = url
     
     print(f"🔗 Clean URL: {clean_url}")
-    print(f"🌐 Sending request to cobalt v10 API...")
     
-    # cobalt v10 API endpoint (NEW)
-    api_url = "https://api.cobalt.tools/"
+    # Public cobalt instances (no JWT auth required)
+    instances = [
+        "https://co.wuk.sh/",  # Official public instance
+        "https://cobalt-api.kwiatekmiki.com/",  # Community mirror
+    ]
     
     # Request payload (v10 schema)
     payload = {
         "url": clean_url,
         "videoQuality": "480",  # 480p for faster processing
-        "filenameStyle": "basic",
+        "filenamePattern": "basic",
         "downloadMode": "auto"
     }
     
-    # Required headers for v10
+    # Headers with User-Agent to avoid bot detection
     headers = {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
-    try:
-        # Send POST request to cobalt v10 API
-        print(f"⏳ Requesting video download...")
-        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
-        
-        if not response.ok:
-            raise Exception(f"cobalt.tools v10 API error: {response.status_code} - {response.text}")
-        
-        result = response.json()
-        status = result.get('status')
-        print(f"📊 cobalt.tools status: {status}")
-        
-        # Extract download URL based on response status
-        download_url = None
-        
-        if status == 'redirect':
-            # Direct redirect to video URL
-            download_url = result.get('url')
-        elif status == 'tunnel':
-            # Cobalt tunnel proxy URL
-            download_url = result.get('url')
-        elif status == 'picker':
-            # Multiple options (rare for YouTube) - pick first video
-            picker_items = result.get('picker', [])
-            for item in picker_items:
-                if item.get('type') == 'video':
-                    download_url = item.get('url')
-                    break
-        elif status == 'error':
-            # Error response
-            error_code = result.get('error', {}).get('code', 'unknown')
-            raise Exception(f"cobalt API error: {error_code}")
-        
-        if not download_url:
-            raise Exception(f"No download URL in cobalt v10 response. Status: {status}, Response: {result}")
-        
-        print(f"🔗 Video download URL obtained: {download_url[:100]}...")
-        print(f"⬇️ Downloading video file...")
-        
-        # Download video with progress tracking
-        video_response = requests.get(download_url, stream=True, timeout=900)
-        
-        if not video_response.ok:
-            raise Exception(f"Video download failed: {video_response.status_code}")
-        
-        total_size = int(video_response.headers.get('content-length', 0))
-        downloaded = 0
-        
-        with open(output_path, 'wb') as f:
-            for chunk in video_response.iter_content(chunk_size=1024*1024):  # 1MB chunks
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total_size > 0 and downloaded % (20*1024*1024) == 0:  # Log every 20MB
-                        progress = (downloaded / total_size) * 100
-                        print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
-        
-        print(f"✅ Video downloaded successfully: {output_path}")
-        return output_path
-        
-    except requests.exceptions.Timeout:
-        raise Exception("cobalt.tools API timeout (30s). Try again later.")
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"cobalt.tools request failed: {str(e)}")
-    except Exception as e:
-        raise Exception(f"cobalt.tools download failed: {str(e)}")
+    last_error = None
+    
+    # Try each instance until one works
+    for api_url in instances:
+        try:
+            print(f"🌐 Trying cobalt instance: {api_url}...")
+            response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+            
+            if not response.ok:
+                last_error = f"{api_url}: {response.status_code} - {response.text}"
+                print(f"⚠️ Instance failed: {last_error}")
+                continue
+            
+            result = response.json()
+            status = result.get('status')
+            print(f"📊 cobalt status: {status}")
+            
+            # Extract download URL based on response status
+            download_url = None
+            
+            if status == 'redirect':
+                download_url = result.get('url')
+            elif status == 'tunnel':
+                download_url = result.get('url')
+            elif status == 'picker':
+                picker_items = result.get('picker', [])
+                for item in picker_items:
+                    if item.get('type') == 'video':
+                        download_url = item.get('url')
+                        break
+            elif status == 'error':
+                error_code = result.get('error', {}).get('code', 'unknown')
+                last_error = f"cobalt error: {error_code}"
+                print(f"⚠️ {last_error}")
+                continue
+            
+            if not download_url:
+                last_error = f"No download URL. Status: {status}"
+                print(f"⚠️ {last_error}")
+                continue
+            
+            print(f"🔗 Video download URL obtained: {download_url[:100]}...")
+            print(f"⬇️ Downloading video file...")
+            
+            # Download video with progress tracking
+            video_response = requests.get(download_url, stream=True, timeout=900)
+            
+            if not video_response.ok:
+                last_error = f"Video download failed: {video_response.status_code}"
+                print(f"⚠️ {last_error}")
+                continue
+            
+            total_size = int(video_response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            with open(output_path, 'wb') as f:
+                for chunk in video_response.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0 and downloaded % (20*1024*1024) == 0:
+                            progress = (downloaded / total_size) * 100
+                            print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
+            
+            print(f"✅ Video downloaded successfully: {output_path}")
+            return output_path
+            
+        except requests.exceptions.Timeout:
+            last_error = f"{api_url}: Timeout"
+            print(f"⚠️ {last_error}")
+            continue
+        except Exception as e:
+            last_error = f"{api_url}: {str(e)}"
+            print(f"⚠️ {last_error}")
+            continue
+    
+    # All instances failed
+    raise Exception(f"All cobalt instances failed. Last error: {last_error}")
 
 def get_video_duration(video_path):
     """Get video duration in seconds using ffprobe"""
