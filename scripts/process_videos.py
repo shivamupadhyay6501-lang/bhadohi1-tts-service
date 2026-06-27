@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Complete Video Production Pipeline
-- Downloads YouTube video (480p)
+- Downloads YouTube video using cobalt.tools (480p)
 - Extracts clips by timestamps
 - Crops center (removes watermarks/borders)
 - Trims to voiceover duration
@@ -12,6 +12,7 @@ import os
 import json
 import subprocess
 import boto3
+import requests
 from pathlib import Path
 
 def run_command(cmd, input_text=None):
@@ -29,16 +30,12 @@ def run_command(cmd, input_text=None):
         raise Exception(f"Command failed: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{stderr}")
     return stdout
 
-def download_youtube_video_with_apify(url, output_path):
-    """Download YouTube video using Apify SDK (official, handles all payload formatting)"""
-    print(f"📥 Downloading video via Apify SDK from: {url}")
+def download_youtube_video_with_cobalt(url, output_path):
+    """Download YouTube video using cobalt.tools API (free, 20 requests/hour)"""
+    print(f"📥 Downloading video via cobalt.tools from: {url}")
     
-    from apify_client import ApifyClient
     import requests
-    
-    APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
-    if not APIFY_TOKEN:
-        raise Exception("APIFY_TOKEN not configured in GitHub secrets")
+    import time
     
     # Clean URL (remove tracking parameters)
     if '?' in url:
@@ -47,108 +44,85 @@ def download_youtube_video_with_apify(url, output_path):
         clean_url = url
     
     print(f"🔗 Clean URL: {clean_url}")
-    print(f"🌐 Initializing Apify SDK client...")
+    print(f"🌐 Sending request to cobalt.tools API...")
     
-    # Initialize Apify client with SDK
-    client = ApifyClient(APIFY_TOKEN)
+    # cobalt.tools API endpoint
+    api_url = "https://api.cobalt.tools/api/json"
     
-    # Prepare input for actor
-    run_input = {
-        "video_url": clean_url,
-        "video_quality": "low"  # 480p for faster processing
+    # Request payload
+    payload = {
+        "url": clean_url,
+        "vQuality": "480",  # Low quality (480p) for faster processing
+        "filenamePattern": "basic",
+        "isAudioOnly": False,
+        "disableMetadata": True
     }
     
-    print(f"📦 Run input: {run_input}")
-    print(f"⏳ Starting actor run (this may take 5-10 minutes)...")
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
     
     try:
-        # Run actor and wait for completion (SDK handles everything)
-        run = client.actor("truefetch/youtube-video-downloader").call(run_input=run_input)
+        # Send POST request to cobalt API
+        print(f"⏳ Requesting video download URL...")
+        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
         
-        print(f"✅ Apify actor run completed!")
-        print(f"📊 Run ID: {run['id']}")
-        print(f"📊 Status: {run['status']}")
+        if not response.ok:
+            raise Exception(f"cobalt.tools API error: {response.status_code} - {response.text}")
         
-        # Get dataset items
-        default_dataset_id = run.get("defaultDatasetId")
+        result = response.json()
+        print(f"📊 cobalt.tools response: {result.get('status', 'unknown')}")
         
-        if not default_dataset_id:
-            raise Exception("No dataset ID found in run result")
+        # Extract download URL from response
+        download_url = None
         
-        print(f"📦 Fetching items from dataset: {default_dataset_id}")
+        # cobalt returns different response formats based on status
+        if result.get('status') == 'redirect':
+            # Direct download URL
+            download_url = result.get('url')
+        elif result.get('status') == 'stream':
+            # Streaming URL
+            download_url = result.get('url')
+        elif result.get('status') == 'picker':
+            # Multiple quality options - pick first one
+            picker_items = result.get('picker', [])
+            if picker_items and len(picker_items) > 0:
+                download_url = picker_items[0].get('url')
         
-        dataset_items = client.dataset(default_dataset_id).list_items().items
+        if not download_url:
+            raise Exception(f"No download URL in cobalt response. Full response: {result}")
         
-        if not dataset_items or len(dataset_items) == 0:
-            raise Exception("Apify returned empty dataset")
+        print(f"🔗 Video download URL obtained: {download_url[:100]}...")
+        print(f"⬇️ Downloading video file...")
         
-        print(f"✅ Found {len(dataset_items)} items in dataset")
+        # Download video with progress tracking
+        video_response = requests.get(download_url, stream=True, timeout=900)
         
+        if not video_response.ok:
+            raise Exception(f"Video download failed: {video_response.status_code}")
+        
+        total_size = int(video_response.headers.get('content-length', 0))
+        downloaded = 0
+        
+        with open(output_path, 'wb') as f:
+            for chunk in video_response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0 and downloaded % (20*1024*1024) == 0:  # Log every 20MB
+                        progress = (downloaded / total_size) * 100
+                        print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
+        
+        print(f"✅ Video downloaded successfully: {output_path}")
+        return output_path
+        
+    except requests.exceptions.Timeout:
+        raise Exception("cobalt.tools API timeout (30s). Try again later.")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"cobalt.tools request failed: {str(e)}")
     except Exception as e:
-        print(f"❌ Apify SDK error: {str(e)}")
-        raise Exception(f"Apify execution failed: {str(e)}")
-    
-    # Get first item
-    first_item = dataset_items[0]
-    print(f"📋 Dataset item keys: {list(first_item.keys())}")
-    
-    # CRITICAL FIX: TrueFetch stores video URL in nested 'video' object
-    video_url = None
-    
-    # Check if 'video' key exists and is a dict with URL
-    video_data = first_item.get("video")
-    
-    if isinstance(video_data, dict):
-        # Nested object with download URL
-        video_url = (
-            video_data.get("url") or 
-            video_data.get("download_url") or 
-            video_data.get("downloadUrl") or
-            video_data.get("fileUrl")
-        )
-        print(f"🔍 Found 'video' object with keys: {list(video_data.keys())}")
-    elif isinstance(video_data, str):
-        # Direct string URL
-        video_url = video_data
-    
-    # Fallback: check top-level keys
-    if not video_url:
-        video_url = (
-            first_item.get("video_file") or 
-            first_item.get("downloadUrl") or 
-            first_item.get("url") or
-            first_item.get("videoUrl") or
-            first_item.get("fileUrl")
-        )
-    
-    if not video_url:
-        print(f"⚠️ Full dataset item: {first_item}")
-        print(f"⚠️ Video object: {video_data}")
-        raise Exception(f"No video URL found in nested structure. Available keys: {list(first_item.keys())}")
-    
-    print(f"🔗 Video download URL: {video_url[:100]}...")
-    print(f"⬇️ Downloading video file...")
-    
-    # Download video with progress
-    response = requests.get(video_url, stream=True, timeout=900)
-    
-    if not response.ok:
-        raise Exception(f"Video download failed: {response.status_code}")
-    
-    total_size = int(response.headers.get('content-length', 0))
-    downloaded = 0
-    
-    with open(output_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
-            if chunk:
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0 and downloaded % (20*1024*1024) == 0:  # Log every 20MB
-                    progress = (downloaded / total_size) * 100
-                    print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
-    
-    print(f"✅ Video downloaded successfully: {output_path}")
-    return output_path
+        raise Exception(f"cobalt.tools download failed: {str(e)}")
 
 def get_video_duration(video_path):
     """Get video duration in seconds using ffprobe"""
@@ -342,9 +316,9 @@ def main():
     print(f"📺 YouTube URL: {youtube_url}")
     print(f"📋 Processing {len(news_data)} news items\n")
     
-    # Step 1: Download source video using Apify
+    # Step 1: Download source video using cobalt.tools
     source_video = 'source_video.mp4'
-    download_youtube_video_with_apify(youtube_url, source_video)
+    download_youtube_video_with_cobalt(youtube_url, source_video)
     
     # Get video properties
     width, height = get_video_resolution(source_video)
