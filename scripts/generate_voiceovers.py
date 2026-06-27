@@ -46,17 +46,14 @@ def generate_voiceover_with_kokoro(text, output_path):
     if not os.path.exists(voice_path):
         raise Exception(f"❌ Voice file not found: {voice_path}")
     
-    # Create Kokoro instance
+    # Create Kokoro instance with voice preloaded
     kokoro = Kokoro(model_path, voice_path)
     
     # Generate audio samples at 1.25x speed
-    samples, sample_rate = kokoro.create(text, speed=1.25)
+    # Note: API takes text and speed, voice is already loaded in constructor
+    samples, sample_rate = kokoro.create(text, speed=1.25, lang='hi')
     
-    # Convert to numpy array if needed
-    if not isinstance(samples, np.ndarray):
-        samples = np.array(samples, dtype=np.float32)
-    
-    # Save to WAV file
+    # Save to WAV file (kokoro-onnx returns numpy array directly)
     sf.write(output_path, samples, sample_rate)
     
     print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
