@@ -30,31 +30,30 @@ def format_srt_time(seconds):
     millis = int((seconds % 1) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
-def generate_voiceover_with_piper(text, output_path):
-    """Generate voiceover using Piper TTS at 1.25x speed"""
-    print(f"🎙️ Generating voiceover at 1.25x speed: {text[:50]}...")
+def generate_voiceover_with_kokoro(text, output_path):
+    """Generate voiceover using Kokoro TTS with hm-psi voice at 1.25x speed"""
+    print(f"🎙️ Generating voiceover with Kokoro (hm-psi) at 1.25x speed: {text[:50]}...")
     
-    # Run Piper TTS with Pratham voice at 1.25x speed using length_scale
+    # Run Kokoro TTS with Psi voice at 1.25x speed
     cmd = [
-        './piper/piper',
-        '--model', 'hi_IN-pratham-medium.onnx',
-        '--length_scale', '0.8',  # 0.8 = 1.25x faster (less length = faster speech)
-        '--output_file', output_path
+        './kokoro',
+        '--text', text,
+        '--voice', 'voices/hm_psi.onnx',
+        '--speed', '1.25',  # 1.25x faster speech
+        '--output', output_path
     ]
     
-    # Pass text via stdin
     process = subprocess.Popen(
         cmd,
-        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
     
-    stdout, stderr = process.communicate(input=text)
+    stdout, stderr = process.communicate()
     
     if process.returncode != 0:
-        raise Exception(f"Piper TTS failed: {stderr}")
+        raise Exception(f"Kokoro TTS failed: {stderr}")
     
     print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
     return output_path
@@ -98,7 +97,7 @@ def upload_to_r2(file_path, remote_key):
     return public_url
 
 def main():
-    print("🚀 Starting Piper TTS Voiceover Generation")
+    print("🚀 Starting Kokoro TTS Voiceover Generation")
     
     # Parse input news data
     news_data = json.loads(os.environ['NEWS_DATA'])
@@ -116,7 +115,7 @@ def main():
             
             # Generate voiceover
             audio_filename = f"voiceover_{number}.wav"
-            audio_path = generate_voiceover_with_piper(text, audio_filename)
+            audio_path = generate_voiceover_with_kokoro(text, audio_filename)
             
             # Get audio duration (estimate: 150 words/min)
             word_count = len(text.split())
@@ -129,8 +128,8 @@ def main():
                 f.write(srt_content)
             
             # Upload to R2
-            audio_key = f"voiceovers/piper_{timestamp}_{number}.wav"
-            srt_key = f"captions/piper_{timestamp}_{number}.srt"
+            audio_key = f"voiceovers/kokoro_{timestamp}_{number}.wav"
+            srt_key = f"captions/kokoro_{timestamp}_{number}.srt"
             
             audio_url = upload_to_r2(audio_filename, audio_key)
             srt_url = upload_to_r2(srt_filename, srt_key)
@@ -141,7 +140,8 @@ def main():
                 'audioUrl': audio_url,
                 'srtUrl': srt_url,
                 'duration': round(duration),
-                'engine': 'piper'
+                'engine': 'kokoro',
+                'voice': 'hm-psi'
             })
             
             # Cleanup local files
@@ -162,7 +162,7 @@ def main():
     
     # Upload results JSON to R2
     try:
-        results_key = f"summaries/piper_batch_{timestamp}.json"
+        results_key = f"summaries/kokoro_batch_{timestamp}.json"
         results_url = upload_to_r2('results.json', results_key)
         print(f"\n✅ Results uploaded: {results_url}")
     except Exception as e:

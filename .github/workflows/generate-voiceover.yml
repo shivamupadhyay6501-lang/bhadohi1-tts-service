@@ -61,27 +61,26 @@ jobs:
           sudo chmod a+rx /usr/local/bin/yt-dlp
           yt-dlp --version
 
-      - name: Cache Piper Binary and Model
-        id: cache-piper
+      - name: Cache Kokoro Binary and Model
+        id: cache-kokoro
         uses: actions/cache@v3
         with:
           path: |
-            piper
-            hi_IN-pratham-medium.onnx
-            hi_IN-pratham-medium.onnx.json
-          key: piper-hindi-pratham-v1
+            kokoro
+            voices
+          key: kokoro-hindi-psi-v1
 
-      - name: Download Piper TTS (if not cached)
-        if: steps.cache-piper.outputs.cache-hit != 'true'
+      - name: Download Kokoro TTS (if not cached)
+        if: steps.cache-kokoro.outputs.cache-hit != 'true'
         run: |
-          echo "📥 Downloading Piper TTS..."
-          wget https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz
-          tar -xzf piper_amd64.tar.gz
-          chmod +x piper/piper
+          echo "📥 Downloading Kokoro TTS..."
+          wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-v0.1.0/kokoro-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf kokoro-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+          chmod +x kokoro
           
-          echo "📥 Downloading Hindi voice model (Pratham - male voice)..."
-          wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"
-          wget "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json"
+          echo "📥 Downloading Hindi Psi voice model..."
+          mkdir -p voices
+          wget -O voices/hm_psi.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-v0.1.0/kokoro-v0.19_hm_psi.onnx"
 
       - name: Install Python dependencies
         run: |
