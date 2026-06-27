@@ -120,6 +120,20 @@ jobs:
           echo "🎨 Creating vertical Instagram Reels..."
           python scripts/create_vertical_reels.py
 
+      - name: Install Firebase Admin SDK
+        run: |
+          pip install firebase-admin
+
+      - name: Step 4 - Save to Firebase Firestore
+        env:
+          NEWS_DATA: ${{ inputs.news_data }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        run: |
+          echo "💾 Saving reels metadata to Firestore..."
+          python scripts/save_to_firestore.py
+
       - name: Upload Results Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -128,6 +142,7 @@ jobs:
             video_results.json
             results.json
             reel_results.json
+            firestore_save_summary.json
           retention-days: 7
 
       - name: Display Final Results
