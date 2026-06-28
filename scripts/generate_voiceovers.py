@@ -1,11 +1,9 @@
 import os
 import json
-import subprocess
+import asyncio
 import boto3
+import edge_tts
 from pathlib import Path
-from kokoro_onnx import Kokoro
-import soundfile as sf
-import numpy as np
 
 def generate_srt(text, duration):
     """Generate simple SRT captions"""
@@ -33,35 +31,46 @@ def format_srt_time(seconds):
     millis = int((seconds % 1) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
-def generate_voiceover_with_kokoro(text, output_path):
-    """Generate voiceover using Kokoro Multilingual with Hindi voice at 1.25x speed"""
-    print(f"🎙️ Generating voiceover with Kokoro Multilingual (Hindi) at 1.25x speed: {text[:50]}...")
+async def generate_voiceover_with_edge_tts(text, output_path):
+    """Generate voiceover using Microsoft Edge TTS with Hindi Male voice (Madhur) at 1.25x speed"""
+    print(f"🎙️ Generating voiceover with Edge TTS (hi-IN-MadhurNeural) at 1.25x speed: {text[:50]}...")
     
-    # Initialize Kokoro with multilingual model and voices
-    model_path = "kokoro-v1.0.onnx"
-    voices_path = "voices-v1.0.bin"
+    # Edge TTS voice: Hindi Male - Madhur
+    voice = "hi-IN-MadhurNeural"
     
-    if not os.path.exists(model_path):
-        raise Exception(f"❌ Kokoro multilingual model not found: {model_path}")
-    if not os.path.exists(voices_path):
-        raise Exception(f"❌ Multilingual voices file not found: {voices_path}")
+    # Generate speech with 25% faster rate
+    communicate = edge_tts.Communicate(text, voice, rate="+25%")
     
-    # Create Kokoro instance with multilingual voices
-    kokoro = Kokoro(model_path, voices_path)
-    
-    # Generate audio with Hindi female voice (hf_alpha) at 1.25x speed
-    samples, sample_rate = kokoro.create(
-        text=text, 
-        voice="hf_alpha",  # Hindi Female Alpha voice from multilingual pack
-        speed=1.25,
-        lang='hi'
-    )
-    
-    # Save to WAV file (kokoro-onnx returns numpy array directly)
-    sf.write(output_path, samples, sample_rate)
+    # Save to file
+    await communicate.save(output_path)
     
     print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
-    return output_path
+    
+    # Get actual audio duration using ffprobe
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+             '-of', 'default=noprint_wrappers=1:nokey=1', output_path],
+            capture_output=True,
+            text=True
+        )
+        duration = float(result.stdout.strip())
+        return output_path, duration
+    except Exception as e:
+        print(f"⚠️ Could not get duration: {e}, using estimate")
+        word_count = len(text.split())
+        duration = (word_count / 150) * 60
+        return output_path, duration
+
+def generate_voiceover_sync(text, output_path):
+    """Synchronous wrapper for async Edge TTS generation"""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(generate_voiceover_with_edge_tts(text, output_path))
 
 def upload_to_r2(file_path, remote_key):
     """Upload file to Cloudflare R2"""
@@ -87,7 +96,12 @@ def upload_to_r2(file_path, remote_key):
     )
     
     # Determine content type
-    content_type = 'audio/wav' if file_path.endswith('.wav') else 'text/plain'
+    if file_path.endswith('.wav'):
+        content_type = 'audio/wav'
+    elif file_path.endswith('.mp3'):
+        content_type = 'audio/mpeg'
+    else:
+        content_type = 'text/plain'
     
     with open(file_path, 'rb') as f:
         s3_client.put_object(
@@ -102,7 +116,7 @@ def upload_to_r2(file_path, remote_key):
     return public_url
 
 def main():
-    print("🚀 Starting Kokoro TTS Voiceover Generation")
+    print("🚀 Starting Edge TTS Voiceover Generation (Hindi Male - Madhur)")
     
     # Parse input news data
     news_data = json.loads(os.environ['NEWS_DATA'])
@@ -118,13 +132,9 @@ def main():
             text = item.get('fullText', item.get('script', ''))
             number = item.get('number', i)
             
-            # Generate voiceover
-            audio_filename = f"voiceover_{number}.wav"
-            audio_path = generate_voiceover_with_kokoro(text, audio_filename)
-            
-            # Get audio duration (estimate: 150 words/min)
-            word_count = len(text.split())
-            duration = (word_count / 150) * 60
+            # Generate voiceover with Edge TTS
+            audio_filename = f"voiceover_{number}.mp3"
+            audio_path, duration = generate_voiceover_sync(text, audio_filename)
             
             # Generate SRT
             srt_content = generate_srt(text, duration)
@@ -133,8 +143,8 @@ def main():
                 f.write(srt_content)
             
             # Upload to R2
-            audio_key = f"voiceovers/kokoro_{timestamp}_{number}.wav"
-            srt_key = f"captions/kokoro_{timestamp}_{number}.srt"
+            audio_key = f"voiceovers/edgetts_{timestamp}_{number}.mp3"
+            srt_key = f"captions/edgetts_{timestamp}_{number}.srt"
             
             audio_url = upload_to_r2(audio_filename, audio_key)
             srt_url = upload_to_r2(srt_filename, srt_key)
@@ -145,8 +155,8 @@ def main():
                 'audioUrl': audio_url,
                 'srtUrl': srt_url,
                 'duration': round(duration),
-                'engine': 'kokoro',
-                'voice': 'hm-psi'
+                'engine': 'edge-tts',
+                'voice': 'hi-IN-MadhurNeural'
             })
             
             # Cleanup local files
@@ -167,7 +177,7 @@ def main():
     
     # Upload results JSON to R2
     try:
-        results_key = f"summaries/kokoro_batch_{timestamp}.json"
+        results_key = f"summaries/edgetts_batch_{timestamp}.json"
         results_url = upload_to_r2('results.json', results_key)
         print(f"\n✅ Results uploaded: {results_url}")
     except Exception as e:
