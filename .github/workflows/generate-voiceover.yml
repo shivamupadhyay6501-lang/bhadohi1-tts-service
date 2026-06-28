@@ -67,18 +67,17 @@ jobs:
         with:
           path: |
             kokoro-v1.0.onnx
-            voices
-          key: kokoro-v1-hindi-psi
+            voices-v1.0.bin
+          key: kokoro-v1-multilingual-hindi
 
-      - name: Download Kokoro Model (if not cached)
+      - name: Download Kokoro Multilingual Model (if not cached)
         if: steps.cache-kokoro.outputs.cache-hit != 'true'
         run: |
-          echo "📥 Downloading Kokoro v1.0 model..."
-          wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+          echo "📥 Downloading Kokoro v1.0 Multilingual Model (with Hindi support)..."
+          wget -O kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.multilingual.onnx
           
-          echo "📥 Downloading Hindi Psi voice from HuggingFace..."
-          mkdir -p voices
-          wget -O voices/hm_psi.bin "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/hm_psi.pt"
+          echo "📥 Downloading Multilingual Voice Matrix (includes Hindi voices)..."
+          wget -O voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.multilingual.bin
 
       - name: Install Python dependencies
         run: |

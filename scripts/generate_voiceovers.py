@@ -34,23 +34,28 @@ def format_srt_time(seconds):
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 def generate_voiceover_with_kokoro(text, output_path):
-    """Generate voiceover using Kokoro TTS with hm-psi voice at 1.25x speed"""
-    print(f"🎙️ Generating voiceover with Kokoro (hm-psi) at 1.25x speed: {text[:50]}...")
+    """Generate voiceover using Kokoro Multilingual with Hindi voice at 1.25x speed"""
+    print(f"🎙️ Generating voiceover with Kokoro Multilingual (Hindi) at 1.25x speed: {text[:50]}...")
     
-    # Initialize Kokoro with model and voice
+    # Initialize Kokoro with multilingual model and voices
     model_path = "kokoro-v1.0.onnx"
-    voice_path = "voices/hm_psi.bin"
+    voices_path = "voices-v1.0.bin"
     
     if not os.path.exists(model_path):
-        raise Exception(f"❌ Kokoro model not found: {model_path}")
-    if not os.path.exists(voice_path):
-        raise Exception(f"❌ Voice file not found: {voice_path}")
+        raise Exception(f"❌ Kokoro multilingual model not found: {model_path}")
+    if not os.path.exists(voices_path):
+        raise Exception(f"❌ Multilingual voices file not found: {voices_path}")
     
-    # Create Kokoro instance
-    kokoro = Kokoro(model_path, voice_path)
+    # Create Kokoro instance with multilingual voices
+    kokoro = Kokoro(model_path, voices_path)
     
-    # Generate audio samples at 1.25x speed with voice argument
-    samples, sample_rate = kokoro.create(text, voice='hm_psi', speed=1.25, lang='hi')
+    # Generate audio with Hindi female voice (hf_alpha) at 1.25x speed
+    samples, sample_rate = kokoro.create(
+        text=text, 
+        voice="hf_alpha",  # Hindi Female Alpha voice from multilingual pack
+        speed=1.25,
+        lang='hi'
+    )
     
     # Save to WAV file (kokoro-onnx returns numpy array directly)
     sf.write(output_path, samples, sample_rate)
