@@ -194,9 +194,9 @@ def process_single_item(args):
         # Use local clip path (no download needed!)
         clip_local = f"clip_{number}.mp4"
         
-        # Voiceover still comes from R2 (no SRT needed anymore!)
-        voiceover_key = f"voiceovers/piper_{timestamp}_{number}.wav"
-        voiceover_local = f"temp_voice_{number}.wav"
+        # Voiceover comes from R2 (Edge TTS MP3 format)
+        voiceover_key = f"voiceovers/edgetts_{timestamp}_{number}.mp3"
+        voiceover_local = f"temp_voice_{number}.mp3"
         
         # Download voiceover from R2
         download_from_r2(voiceover_key, voiceover_local)
