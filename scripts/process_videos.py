@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Complete Video Production Pipeline
-- Downloads YouTube video using cobalt.tools (480p)
+- Downloads YouTube video using Apify with 5-token rotation (480p)
 - Extracts clips by timestamps
 - Crops center (removes watermarks/borders)
 - Trims to voiceover duration
@@ -30,13 +30,31 @@ def run_command(cmd, input_text=None):
         raise Exception(f"Command failed: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{stderr}")
     return stdout
 
-def download_youtube_video_with_cobalt(url, output_path):
-    """Download YouTube video using cobalt public instance (no auth required)"""
-    print(f"📥 Downloading video via cobalt public instance from: {url}")
+def download_youtube_video_with_apify(url, output_path):
+    """Download YouTube video using Apify with 5-token rotation (loop fallback)"""
+    print(f"📥 Downloading video via Apify (5-token rotation) from: {url}")
     
+    from apify_client import ApifyClient
     import requests
     
-    # Clean URL (remove tracking parameters)
+    # Get all 5 tokens from environment
+    tokens = [
+        os.environ.get('APIFY_TOKEN_1'),
+        os.environ.get('APIFY_TOKEN_2'),
+        os.environ.get('APIFY_TOKEN_3'),
+        os.environ.get('APIFY_TOKEN_4'),
+        os.environ.get('APIFY_TOKEN_5'),
+    ]
+    
+    # Filter out None/empty tokens
+    tokens = [t.strip() for t in tokens if t and t.strip()]
+    
+    if not tokens:
+        raise Exception("❌ No Apify tokens configured in GitHub secrets!")
+    
+    print(f"🔑 Found {len(tokens)} Apify tokens available for rotation")
+    
+    # Clean URL
     if '?' in url:
         clean_url = url.split('?')[0]
     else:
@@ -44,105 +62,123 @@ def download_youtube_video_with_cobalt(url, output_path):
     
     print(f"🔗 Clean URL: {clean_url}")
     
-    # Public cobalt instances (no JWT auth required)
-    instances = [
-        "https://co.wuk.sh/",  # Official public instance
-        "https://cobalt-api.kwiatekmiki.com/",  # Community mirror
-    ]
-    
-    # Request payload (v10 schema)
-    payload = {
-        "url": clean_url,
-        "videoQuality": "480",  # 480p for faster processing
-        "filenamePattern": "basic",
-        "downloadMode": "auto"
-    }
-    
-    # Headers with User-Agent to avoid bot detection
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
     last_error = None
     
-    # Try each instance until one works
-    for api_url in instances:
+    # Try each token in loop (1 → 2 → 3 → 4 → 5 → 1 → ...)
+    for attempt in range(len(tokens)):
+        token_index = attempt % len(tokens)  # Loop back to 0 after last token
+        token = tokens[token_index]
+        token_number = token_index + 1
+        
         try:
-            print(f"🌐 Trying cobalt instance: {api_url}...")
-            response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+            print(f"\n🔄 Attempt {attempt + 1}/{len(tokens)}: Trying Apify Token #{token_number}...")
+            print(f"🌐 Initializing Apify client...")
             
-            if not response.ok:
-                last_error = f"{api_url}: {response.status_code} - {response.text}"
-                print(f"⚠️ Instance failed: {last_error}")
-                continue
+            # Initialize Apify client with this token
+            client = ApifyClient(token)
             
-            result = response.json()
-            status = result.get('status')
-            print(f"📊 cobalt status: {status}")
+            # Prepare input
+            run_input = {
+                "video_url": clean_url,
+                "video_quality": "low"  # 480p for faster processing
+            }
             
-            # Extract download URL based on response status
-            download_url = None
+            print(f"📦 Run input: {run_input}")
+            print(f"⏳ Starting actor run (may take 5-10 minutes)...")
             
-            if status == 'redirect':
-                download_url = result.get('url')
-            elif status == 'tunnel':
-                download_url = result.get('url')
-            elif status == 'picker':
-                picker_items = result.get('picker', [])
-                for item in picker_items:
-                    if item.get('type') == 'video':
-                        download_url = item.get('url')
-                        break
-            elif status == 'error':
-                error_code = result.get('error', {}).get('code', 'unknown')
-                last_error = f"cobalt error: {error_code}"
-                print(f"⚠️ {last_error}")
-                continue
+            # Run actor and wait for completion
+            run = client.actor("truefetch/youtube-video-downloader").call(run_input=run_input)
             
-            if not download_url:
-                last_error = f"No download URL. Status: {status}"
-                print(f"⚠️ {last_error}")
-                continue
+            print(f"✅ Apify actor run completed with Token #{token_number}!")
+            print(f"📊 Run ID: {run['id']}")
+            print(f"📊 Status: {run['status']}")
             
-            print(f"🔗 Video download URL obtained: {download_url[:100]}...")
+            # Get dataset items
+            default_dataset_id = run.get("defaultDatasetId")
+            
+            if not default_dataset_id:
+                raise Exception("No dataset ID found in run result")
+            
+            print(f"📦 Fetching items from dataset: {default_dataset_id}")
+            
+            dataset_items = client.dataset(default_dataset_id).list_items().items
+            
+            if not dataset_items or len(dataset_items) == 0:
+                raise Exception("Apify returned empty dataset")
+            
+            print(f"✅ Found {len(dataset_items)} items in dataset")
+            
+            # Get video URL from response
+            first_item = dataset_items[0]
+            print(f"📋 Dataset item keys: {list(first_item.keys())}")
+            
+            # Extract video URL from nested structure
+            video_url = None
+            video_data = first_item.get("video")
+            
+            if isinstance(video_data, dict):
+                video_url = (
+                    video_data.get("url") or 
+                    video_data.get("download_url") or 
+                    video_data.get("downloadUrl") or
+                    video_data.get("fileUrl")
+                )
+            elif isinstance(video_data, str):
+                video_url = video_data
+            
+            # Fallback to top-level keys
+            if not video_url:
+                video_url = (
+                    first_item.get("video_file") or 
+                    first_item.get("downloadUrl") or 
+                    first_item.get("url") or
+                    first_item.get("videoUrl") or
+                    first_item.get("fileUrl")
+                )
+            
+            if not video_url:
+                raise Exception(f"No video URL found. Available keys: {list(first_item.keys())}")
+            
+            print(f"🔗 Video download URL: {video_url[:100]}...")
             print(f"⬇️ Downloading video file...")
             
-            # Download video with progress tracking
-            video_response = requests.get(download_url, stream=True, timeout=900)
+            # Download video with progress
+            response = requests.get(video_url, stream=True, timeout=900)
             
-            if not video_response.ok:
-                last_error = f"Video download failed: {video_response.status_code}"
-                print(f"⚠️ {last_error}")
-                continue
+            if not response.ok:
+                raise Exception(f"Video download failed: {response.status_code}")
             
-            total_size = int(video_response.headers.get('content-length', 0))
+            total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
             
             with open(output_path, 'wb') as f:
-                for chunk in video_response.iter_content(chunk_size=1024*1024):
+                for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        if total_size > 0 and downloaded % (20*1024*1024) == 0:
+                        if total_size > 0 and downloaded % (20*1024*1024) == 0:  # Log every 20MB
                             progress = (downloaded / total_size) * 100
                             print(f"📥 Progress: {progress:.1f}% ({downloaded//1024//1024}MB/{total_size//1024//1024}MB)")
             
-            print(f"✅ Video downloaded successfully: {output_path}")
+            print(f"✅ Video downloaded successfully with Token #{token_number}: {output_path}")
             return output_path
             
-        except requests.exceptions.Timeout:
-            last_error = f"{api_url}: Timeout"
-            print(f"⚠️ {last_error}")
-            continue
         except Exception as e:
-            last_error = f"{api_url}: {str(e)}"
-            print(f"⚠️ {last_error}")
-            continue
+            last_error = str(e)
+            print(f"❌ Token #{token_number} failed: {last_error}")
+            
+            # Check if it's a limit/quota error
+            error_lower = last_error.lower()
+            if any(keyword in error_lower for keyword in ['limit', 'quota', 'exceeded', 'credit', 'charge']):
+                print(f"⚠️ Token #{token_number} limit reached! Rotating to next token...")
+                continue
+            else:
+                # Other error (network, timeout, etc.) - don't rotate, just fail
+                print(f"⚠️ Non-limit error with Token #{token_number}. Not rotating.")
+                raise Exception(f"Apify error with Token #{token_number}: {last_error}")
     
-    # All instances failed
-    raise Exception(f"All cobalt instances failed. Last error: {last_error}")
+    # All tokens exhausted
+    raise Exception(f"❌ All {len(tokens)} Apify tokens exhausted! Last error: {last_error}")
 
 def get_video_duration(video_path):
     """Get video duration in seconds using ffprobe"""
@@ -336,9 +372,9 @@ def main():
     print(f"📺 YouTube URL: {youtube_url}")
     print(f"📋 Processing {len(news_data)} news items\n")
     
-    # Step 1: Download source video using cobalt.tools
+    # Step 1: Download source video using Apify (5-token rotation)
     source_video = 'source_video.mp4'
-    download_youtube_video_with_cobalt(youtube_url, source_video)
+    download_youtube_video_with_apify(youtube_url, source_video)
     
     # Get video properties
     width, height = get_video_resolution(source_video)

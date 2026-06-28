@@ -82,19 +82,24 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install boto3 requests kokoro-onnx onnxruntime soundfile
+          pip install boto3 requests apify-client kokoro-onnx onnxruntime soundfile
 
       - name: Step 1 - Download and Process Video Clips
         env:
           YOUTUBE_URL: ${{ inputs.youtube_url }}
           NEWS_DATA: ${{ inputs.news_data }}
+          APIFY_TOKEN_1: ${{ secrets.APIFY_TOKEN_1 }}
+          APIFY_TOKEN_2: ${{ secrets.APIFY_TOKEN_2 }}
+          APIFY_TOKEN_3: ${{ secrets.APIFY_TOKEN_3 }}
+          APIFY_TOKEN_4: ${{ secrets.APIFY_TOKEN_4 }}
+          APIFY_TOKEN_5: ${{ secrets.APIFY_TOKEN_5 }}
           R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
           R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
         run: |
-          echo "🎬 Starting video processing with cobalt.tools..."
+          echo "🎬 Starting video processing with Apify (5-token rotation)..."
           python scripts/process_videos.py
 
       - name: Step 2 - Generate Voiceovers and Captions
