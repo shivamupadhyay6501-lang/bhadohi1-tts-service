@@ -39,28 +39,14 @@ jobs:
           # Install complete espeak-ng with ALL language data (including Hindi phonemes)
           sudo apt-get install -y espeak-ng espeak-ng-data libespeak-ng1 libespeak-ng-dev
           
-          # Verify espeak-ng data directory exists
-          if [ ! -d "/usr/share/espeak-ng-data" ]; then
-            echo "❌ espeak-ng-data directory not found!"
-            exit 1
-          fi
-          
-          # Verify critical phoneme files exist
-          ls -la /usr/share/espeak-ng-data/phontab || echo "⚠️ phontab missing"
-          ls -la /usr/share/espeak-ng-data/phonindex || echo "⚠️ phonindex missing"
-          
-          # If files missing, reinstall espeak-ng-data
-          if [ ! -f "/usr/share/espeak-ng-data/phontab" ]; then
-            echo "📥 Reinstalling espeak-ng-data..."
-            sudo apt-get install --reinstall -y espeak-ng-data
-          fi
+          # Set espeak-ng data path environment variable
+          echo "ESPEAK_DATA_PATH=/usr/share/espeak-ng-data" >> $GITHUB_ENV
           
           # Update library cache to ensure proper linking
           sudo ldconfig
           
-          # Verify espeak-ng installation and Hindi language support
-          espeak-ng --version || echo "Warning: espeak-ng not found"
-          espeak-ng --voices=hi || echo "Warning: Hindi voices not found"
+          # Verify espeak-ng binary works
+          espeak-ng --version
           
           # Install comprehensive font packages for Hindi/Devanagari
           sudo apt-get install -y \
@@ -73,13 +59,6 @@ jobs:
           
           # Rebuild font cache
           sudo fc-cache -f -v
-          
-          # Verify Hindi fonts are available
-          echo "📝 Checking installed fonts..."
-          fc-list :lang=hi | head -20 || echo "Warning: No Hindi fonts found"
-          
-          # List Noto fonts specifically
-          fc-list | grep -i noto | grep -i sans | head -10 || echo "Noto Sans fonts check"
           
       - name: Install yt-dlp
         run: |
