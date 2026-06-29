@@ -61,9 +61,22 @@ jobs:
           sudo chmod a+rx /usr/local/bin/yt-dlp
           yt-dlp --version
 
+      - name: Install Piper TTS
+        run: |
+          echo "📥 Installing Piper TTS..."
+          wget -O piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf piper.tar.gz
+          sudo mv piper/piper /usr/local/bin/
+          piper --version
+          
+          echo "📥 Downloading best Hindi Male voice model..."
+          mkdir -p ~/.local/share/piper/voices
+          wget -O ~/.local/share/piper/voices/hi_IN-male-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/male/medium/hi_IN-male-medium.onnx
+          wget -O ~/.local/share/piper/voices/hi_IN-male-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/male/medium/hi_IN-male-medium.onnx.json
+
       - name: Install Python dependencies
         run: |
-          pip install boto3 requests apify-client edge-tts firebase-admin
+          pip install boto3 requests apify-client firebase-admin
 
       - name: Step 1 - Download and Process Video Clips
         env:
@@ -83,7 +96,7 @@ jobs:
           echo "🎬 Starting video processing with Apify (5-token rotation)..."
           python scripts/process_videos.py
 
-      - name: Step 2 - Generate Voiceovers with Edge TTS (Hindi Male - Madhur)
+      - name: Step 2 - Generate Voiceovers with Piper TTS (Hindi Male - Best Quality)
         env:
           NEWS_DATA: ${{ inputs.news_data }}
           R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
@@ -92,7 +105,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
         run: |
-          echo "🎙️ Generating voiceovers with Microsoft Edge TTS..."
+          echo "🎙️ Generating voiceovers with Piper TTS (1x speed)..."
           python scripts/generate_voiceovers.py
 
       - name: Step 3 - Create Vertical Reels (9:16 Format)

@@ -1,8 +1,7 @@
 import os
 import json
-import asyncio
+import subprocess
 import boto3
-import edge_tts
 from pathlib import Path
 
 def generate_srt(text, duration):
@@ -31,24 +30,32 @@ def format_srt_time(seconds):
     millis = int((seconds % 1) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
-async def generate_voiceover_with_edge_tts(text, output_path):
-    """Generate voiceover using Microsoft Edge TTS with Hindi Male voice (Madhur) at 1.25x speed"""
-    print(f"🎙️ Generating voiceover with Edge TTS (hi-IN-MadhurNeural) at 1.25x speed: {text[:50]}...")
+def generate_voiceover_with_piper(text, output_path):
+    """Generate voiceover using Piper TTS with best Hindi Male voice at normal 1x speed"""
+    print(f"🎙️ Generating voiceover with Piper (hi_IN-male-medium) at 1x speed: {text[:50]}...")
     
-    # Edge TTS voice: Hindi Male - Madhur
-    voice = "hi-IN-MadhurNeural"
+    # Best Hindi Male voice from Piper
+    # hi_IN-male-medium is the highest quality male voice for Hindi
+    voice_model = "hi_IN-male-medium"
     
-    # Generate speech with 25% faster rate
-    communicate = edge_tts.Communicate(text, voice, rate="+25%")
+    # Create temp text file
+    text_file = output_path.replace('.wav', '.txt')
+    with open(text_file, 'w', encoding='utf-8') as f:
+        f.write(text)
     
-    # Save to file
-    await communicate.save(output_path)
+    # Run Piper TTS at normal 1x speed (no speed adjustment)
+    cmd = [
+        'piper',
+        '--model', voice_model,
+        '--output_file', output_path,
+        '--input', text_file
+    ]
     
-    print(f"✅ Voiceover generated at 1.25x speed: {output_path}")
-    
-    # Get actual audio duration using ffprobe
     try:
-        import subprocess
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(f"✅ Voiceover generated at 1x speed: {output_path}")
+        
+        # Get actual audio duration using ffprobe
         result = subprocess.run(
             ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
              '-of', 'default=noprint_wrappers=1:nokey=1', output_path],
@@ -56,21 +63,19 @@ async def generate_voiceover_with_edge_tts(text, output_path):
             text=True
         )
         duration = float(result.stdout.strip())
+        
+        # Cleanup temp text file
+        if os.path.exists(text_file):
+            os.remove(text_file)
+        
         return output_path, duration
+        
     except Exception as e:
-        print(f"⚠️ Could not get duration: {e}, using estimate")
-        word_count = len(text.split())
-        duration = (word_count / 150) * 60
-        return output_path, duration
-
-def generate_voiceover_sync(text, output_path):
-    """Synchronous wrapper for async Edge TTS generation"""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(generate_voiceover_with_edge_tts(text, output_path))
+        print(f"❌ Piper TTS failed: {e}")
+        # Cleanup on error
+        if os.path.exists(text_file):
+            os.remove(text_file)
+        raise
 
 def upload_to_r2(file_path, remote_key):
     """Upload file to Cloudflare R2"""
@@ -116,7 +121,7 @@ def upload_to_r2(file_path, remote_key):
     return public_url
 
 def main():
-    print("🚀 Starting Edge TTS Voiceover Generation (Hindi Male - Madhur)")
+    print("🚀 Starting Piper TTS Voiceover Generation (Hindi Male - Best Quality)")
     
     # Parse input news data
     news_data = json.loads(os.environ['NEWS_DATA'])
@@ -132,9 +137,9 @@ def main():
             text = item.get('fullText', item.get('script', ''))
             number = item.get('number', i)
             
-            # Generate voiceover with Edge TTS
-            audio_filename = f"voiceover_{number}.mp3"
-            audio_path, duration = generate_voiceover_sync(text, audio_filename)
+            # Generate voiceover with Piper
+            audio_filename = f"voiceover_{number}.wav"
+            audio_path, duration = generate_voiceover_with_piper(text, audio_filename)
             
             # Generate SRT
             srt_content = generate_srt(text, duration)
@@ -143,8 +148,8 @@ def main():
                 f.write(srt_content)
             
             # Upload to R2
-            audio_key = f"voiceovers/edgetts_{timestamp}_{number}.mp3"
-            srt_key = f"captions/edgetts_{timestamp}_{number}.srt"
+            audio_key = f"voiceovers/piper_{timestamp}_{number}.wav"
+            srt_key = f"captions/piper_{timestamp}_{number}.srt"
             
             audio_url = upload_to_r2(audio_filename, audio_key)
             srt_url = upload_to_r2(srt_filename, srt_key)
@@ -155,8 +160,9 @@ def main():
                 'audioUrl': audio_url,
                 'srtUrl': srt_url,
                 'duration': round(duration),
-                'engine': 'edge-tts',
-                'voice': 'hi-IN-MadhurNeural'
+                'engine': 'piper',
+                'voice': 'hi_IN-male-medium',
+                'speed': '1x'
             })
             
             # Cleanup local files
@@ -177,7 +183,7 @@ def main():
     
     # Upload results JSON to R2
     try:
-        results_key = f"summaries/edgetts_batch_{timestamp}.json"
+        results_key = f"summaries/piper_batch_{timestamp}.json"
         results_url = upload_to_r2('results.json', results_key)
         print(f"\n✅ Results uploaded: {results_url}")
     except Exception as e:
