@@ -36,18 +36,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           
-          # Install complete espeak-ng with ALL language data (including Hindi phonemes)
-          sudo apt-get install -y espeak-ng espeak-ng-data libespeak-ng1 libespeak-ng-dev
-          
-          # Set espeak-ng data path environment variable
-          echo "ESPEAK_DATA_PATH=/usr/share/espeak-ng-data" >> $GITHUB_ENV
-          
-          # Update library cache to ensure proper linking
-          sudo ldconfig
-          
-          # Verify espeak-ng binary works
-          espeak-ng --version
-          
           # Install comprehensive font packages for Hindi/Devanagari
           sudo apt-get install -y \
             fonts-noto-core \
@@ -72,10 +60,19 @@ jobs:
           wget -O piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
           tar -xzf piper.tar.gz
           
-          # Copy Piper shared libraries to system path (fixes libpiper_phonemize.so.1 error)
+          # CRITICAL: Copy Piper's bundled espeak-ng-data to system location
+          # Piper tar.gz comes with its own espeak-ng-data folder with all phoneme files
+          echo "📚 Installing Piper's bundled espeak-ng-data..."
+          sudo mkdir -p /usr/share
+          sudo cp -r piper/espeak-ng-data /usr/share/
+          
+          # Verify phontab exists in bundled data
+          ls -lh /usr/share/espeak-ng-data/phontab && echo "✅ phontab found!" || echo "❌ phontab missing!"
+          
+          # Copy Piper shared libraries to system path
           echo "📚 Installing Piper shared libraries..."
-          sudo cp piper/lib*.so* /usr/local/lib/ 2>/dev/null || echo "No additional libs to copy"
-          sudo cp piper/*.so* /usr/local/lib/ 2>/dev/null || echo "No root libs to copy"
+          sudo cp piper/lib*.so* /usr/local/lib/ 2>/dev/null || echo "No lib folder libs"
+          sudo cp piper/*.so* /usr/local/lib/ 2>/dev/null || echo "No root libs"
           sudo ldconfig
           
           # Move piper binary to system path
