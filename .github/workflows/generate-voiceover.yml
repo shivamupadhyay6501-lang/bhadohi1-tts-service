@@ -86,12 +86,18 @@ jobs:
           echo "📥 Downloading best Hindi Male voice model..."
           mkdir -p ~/.local/share/piper/voices
           
-          # Correct Hugging Face URLs for Hindi male voice (v1.0.0)
-          wget -O ~/.local/share/piper/voices/hi_IN-hindi-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/hindi/medium/hi_IN-hindi-medium.onnx
-          wget -O ~/.local/share/piper/voices/hi_IN-hindi-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/hindi/medium/hi_IN-hindi-medium.onnx.json
+          # Using k2-fsa mirror (working alternative to Hugging Face)
+          # Male voices: pratham (male), rohan (male)
+          wget -O piper-voices-hindi.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-hi_IN-pratham-medium.tar.bz2
+          tar -xjf piper-voices-hindi.tar.bz2
+          
+          # Copy model files to piper directory
+          cp vits-piper-hi_IN-pratham-medium/*.onnx ~/.local/share/piper/voices/hi_IN-pratham-medium.onnx
+          cp vits-piper-hi_IN-pratham-medium/*.json ~/.local/share/piper/voices/hi_IN-pratham-medium.onnx.json
           
           # Verify files downloaded
           ls -lh ~/.local/share/piper/voices/
+          echo "✅ Hindi male voice model (pratham-medium) installed"
 
       - name: Install Python dependencies
         run: |
