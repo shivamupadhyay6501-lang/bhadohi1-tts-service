@@ -42,21 +42,29 @@ def generate_voiceover_with_piper(text, output_path):
     if not os.path.exists(voice_model_path):
         raise Exception(f"Model file not found at: {voice_model_path}")
     
-    # Create temp text file
-    text_file = output_path.replace('.wav', '.txt')
-    with open(text_file, 'w', encoding='utf-8') as f:
-        f.write(text)
-    
-    # Run Piper TTS with full model path
+    # Run Piper TTS using stdin pipe (safer than temp file for Hindi text)
     cmd = [
         'piper',
         '--model', voice_model_path,
-        '--output_file', output_path,
-        '--input', text_file
+        '--output_file', output_path
     ]
     
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # Use stdin pipe to pass text directly (avoids file encoding issues)
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8'
+        )
+        
+        stdout, stderr = process.communicate(input=text.strip())
+        
+        if process.returncode != 0:
+            raise Exception(f"Piper Core Runtime Error: {stderr}")
+        
         print(f"✅ Voiceover generated at 1x speed: {output_path}")
         
         # Get actual audio duration using ffprobe
@@ -68,17 +76,10 @@ def generate_voiceover_with_piper(text, output_path):
         )
         duration = float(result.stdout.strip())
         
-        # Cleanup temp text file
-        if os.path.exists(text_file):
-            os.remove(text_file)
-        
         return output_path, duration
         
     except Exception as e:
         print(f"❌ Piper TTS failed: {e}")
-        # Cleanup on error
-        if os.path.exists(text_file):
-            os.remove(text_file)
         raise
 
 def upload_to_r2(file_path, remote_key):

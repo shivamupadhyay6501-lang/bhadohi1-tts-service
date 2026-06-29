@@ -36,11 +36,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           
-          # Install espeak-ng for Piper TTS (required for phoneme synthesis)
+          # Install complete espeak-ng with ALL language data (including Hindi phonemes)
           sudo apt-get install -y espeak-ng espeak-ng-data libespeak-ng1 libespeak-ng-dev
           
-          # Verify espeak-ng installation
+          # Update library cache to ensure proper linking
+          sudo ldconfig
+          
+          # Verify espeak-ng installation and Hindi language support
           espeak-ng --version || echo "Warning: espeak-ng not found"
+          espeak-ng --voices=hi || echo "Warning: Hindi voices not found"
           
           # Install comprehensive font packages for Hindi/Devanagari
           sudo apt-get install -y \
