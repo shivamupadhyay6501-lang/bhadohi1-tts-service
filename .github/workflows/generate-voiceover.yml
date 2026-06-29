@@ -85,8 +85,13 @@ jobs:
           
           echo "📥 Downloading best Hindi Male voice model..."
           mkdir -p ~/.local/share/piper/voices
-          wget -O ~/.local/share/piper/voices/hi_IN-male-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/male/medium/hi_IN-male-medium.onnx
-          wget -O ~/.local/share/piper/voices/hi_IN-male-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/male/medium/hi_IN-male-medium.onnx.json
+          
+          # Correct Hugging Face URLs for Hindi male voice (v1.0.0)
+          wget -O ~/.local/share/piper/voices/hi_IN-hindi-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/hindi/medium/hi_IN-hindi-medium.onnx
+          wget -O ~/.local/share/piper/voices/hi_IN-hindi-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/hindi/medium/hi_IN-hindi-medium.onnx.json
+          
+          # Verify files downloaded
+          ls -lh ~/.local/share/piper/voices/
 
       - name: Install Python dependencies
         run: |

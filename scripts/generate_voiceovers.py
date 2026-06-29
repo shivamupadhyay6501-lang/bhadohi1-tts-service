@@ -32,11 +32,10 @@ def format_srt_time(seconds):
 
 def generate_voiceover_with_piper(text, output_path):
     """Generate voiceover using Piper TTS with best Hindi Male voice at normal 1x speed"""
-    print(f"🎙️ Generating voiceover with Piper (hi_IN-male-medium) at 1x speed: {text[:50]}...")
+    print(f"🎙️ Generating voiceover with Piper (hi_IN-hindi-medium) at 1x speed: {text[:50]}...")
     
-    # Best Hindi Male voice from Piper
-    # hi_IN-male-medium is the highest quality male voice for Hindi
-    voice_model = "hi_IN-male-medium"
+    # Best Hindi voice from Piper (correct model name from Hugging Face v1.0.0)
+    voice_model = "hi_IN-hindi-medium"
     
     # Create temp text file
     text_file = output_path.replace('.wav', '.txt')
@@ -161,7 +160,7 @@ def main():
                 'srtUrl': srt_url,
                 'duration': round(duration),
                 'engine': 'piper',
-                'voice': 'hi_IN-male-medium',
+                'voice': 'hi_IN-hindi-medium',
                 'speed': '1x'
             })
             
