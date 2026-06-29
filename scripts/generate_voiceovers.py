@@ -34,18 +34,23 @@ def generate_voiceover_with_piper(text, output_path):
     """Generate voiceover using Piper TTS with best Hindi Male voice at normal 1x speed"""
     print(f"🎙️ Generating voiceover with Piper (hi_IN-pratham-medium) at 1x speed: {text[:50]}...")
     
-    # Hindi male voice from k2-fsa mirror (pratham = male voice)
-    voice_model = "hi_IN-pratham-medium"
+    # Full path to model file (Piper needs absolute path, not just model name)
+    home_dir = os.path.expanduser("~")
+    voice_model_path = f"{home_dir}/.local/share/piper/voices/hi_IN-pratham-medium.onnx"
+    
+    # Verify model exists
+    if not os.path.exists(voice_model_path):
+        raise Exception(f"Model file not found at: {voice_model_path}")
     
     # Create temp text file
     text_file = output_path.replace('.wav', '.txt')
     with open(text_file, 'w', encoding='utf-8') as f:
         f.write(text)
     
-    # Run Piper TTS at normal 1x speed (no speed adjustment)
+    # Run Piper TTS with full model path
     cmd = [
         'piper',
-        '--model', voice_model,
+        '--model', voice_model_path,
         '--output_file', output_path,
         '--input', text_file
     ]
