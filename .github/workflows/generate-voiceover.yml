@@ -72,6 +72,14 @@ jobs:
           echo "📥 Installing Piper TTS..."
           wget -O piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
           tar -xzf piper.tar.gz
+          
+          # Copy Piper shared libraries to system path (fixes libpiper_phonemize.so.1 error)
+          echo "📚 Installing Piper shared libraries..."
+          sudo cp piper/lib*.so* /usr/local/lib/ 2>/dev/null || echo "No additional libs to copy"
+          sudo cp piper/*.so* /usr/local/lib/ 2>/dev/null || echo "No root libs to copy"
+          sudo ldconfig
+          
+          # Move piper binary to system path
           sudo mv piper/piper /usr/local/bin/
           piper --version
           
